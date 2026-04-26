@@ -57,7 +57,7 @@ This walks you through three things only: install the Telegram channel plugin, c
 
 **3. Host shell** — start the long-running channel session:
 ```bash
-docker compose exec -d assistant /app/bin/start-channel.sh
+docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
 ```
 
 **4. Telegram chat** — finish setup (Phase 2):

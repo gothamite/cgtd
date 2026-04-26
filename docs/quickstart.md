@@ -58,17 +58,20 @@ At the in-container Claude Code prompt:
 
 The skill walks you through:
 
-1. **Install the Telegram channel plugin** — `/plugin marketplace list`, then `/plugin install telegram@<your-marketplace>`. The default is `claude-plugins-official`; if `/plugin list` shows different, set `CGTD_CHANNEL_SPEC=plugin:telegram@<your-marketplace>` in `.env`.
+1. **Install the Telegram channel plugin** — `/plugin marketplace list`, then `/plugin install telegram@<your-marketplace>`. The default marketplace is `claude-plugins-official`; if `/plugin list` shows something different, substitute it on the command line in Step 3 below where you start the channel session.
 2. **Configure the bot token** — `/telegram:configure`, paste the BotFather token. (The plugin stores the token itself — not in `.env`.)
 3. **Pair your Telegram account** — `/telegram:access`, DM your bot, approve the pairing.
 
-When the skill prints "✓ Bootstrap done", `exit` Claude Code (back to `[host]`), then start the long-running channel session:
+When the skill prints "✓ Bootstrap done", `exit` Claude Code (back to `[host]`), then open a new in-container Claude session subscribed to the Telegram channel:
 
 ```bash
-exit                                                               # [claude-in-container] → drops you back to [host]
-docker compose exec -d assistant /app/bin/start-channel.sh         # [host]
-docker compose exec assistant tail -f /data/channel.log            # [host], optional — watch it work
+exit                                                                                  # [claude-in-container] → drops you back to [host]
+docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official        # [host]
 ```
+
+**Keep this terminal open.** It holds your live channel session — every Telegram message to the bot will appear here as a `<channel source="telegram" ...>` tag, and Claude will process it. Close the terminal and the bot stops responding (and crons can't fire).
+
+> For 24/7 operation: run on a VPS, or keep the laptop on with sleep disabled. macOS users: System Settings → Energy → "Prevent automatic sleeping when display is off" lets the channel keep running with the lid closed. (Future versions of cgtd may include `tmux`-based detach/reattach, but for now the channel session is tied to its terminal.)
 
 ## 4. Phase 2 — Telegram chat  `[telegram]`
 
@@ -97,7 +100,7 @@ When done, the bot tells you to restart the channel session so the new skill ove
 
 ```bash
 docker compose restart assistant                                # [host]
-docker compose exec -d assistant /app/bin/start-channel.sh      # [host]
+docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official      # [host]
 ```
 
 ## 5. Verify  `[telegram]` or `[claude-in-container]`
@@ -137,7 +140,7 @@ services:
 
 ```bash
 docker compose up -d
-docker compose exec -d assistant /app/bin/start-channel.sh   # restart channel session
+docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official   # restart channel session
 ```
 
 Edits to `./skills/*` are live; edits to `/data/skills-overlay/*` always win when both exist.
@@ -148,7 +151,7 @@ Edits to `./skills/*` are live; edits to `/data/skills-overlay/*` always win whe
 git pull
 docker compose build
 docker compose up -d
-docker compose exec -d assistant /app/bin/start-channel.sh
+docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
 ```
 
 State (`./data/config.json`, `data/skills-overlay/`, memory, claude-home, logs) survives rebuilds.

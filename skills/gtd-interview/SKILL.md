@@ -186,7 +186,7 @@ Save into `config.jobs.<name>.{enabled,cron}`.
 > Чтобы скиллы перезагрузились с твоей кастомизацией, перезапусти channel session:
 > ```
 > docker compose restart assistant
-> docker compose exec -d assistant /app/bin/start-channel.sh
+> docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
 > ```
 
 ## Failure modes

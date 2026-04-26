@@ -55,7 +55,6 @@ All persistent state is in `/data/`:
 | `memory/` | Default + learned behavioral memories |
 | `pending-reviews.jsonl` | Awaiting-user-reply state for morning/evening |
 | `cron-log.jsonl` | Run history |
-| `channel.log` | Long-running channel session log |
 | `lock/<job>.lock` | Per-job mutex via `flock` |
 | `mcp/google-workspace/` | OAuth refresh tokens, per email |
 | `claude-home/` | Symlinked to `/root/.claude` — holds claude.ai credentials, installed plugins, plugin config (e.g. Telegram allowlist), per-install settings.json |
@@ -96,9 +95,9 @@ If the container is down or the channel session isn't running at fire time, the 
 
 **Debugging a cron that didn't fire:**
 - Inside Claude Code: `CronList` shows everything, including failures. Filter by `cgtd-${install_id}-` prefix to see this install's jobs.
-- Inside the container: `cat /data/cron-log.jsonl` is the run history. `/data/channel.log` shows the long-running channel session.
+- Inside the container: `cat /data/cron-log.jsonl` is the run history.
 - `docker compose exec assistant /app/bin/cron-log.sh last-ok <job>` returns the ISO timestamp of the last successful run.
-- Cron firing requires the channel session (or any Claude Code session inside this container) to be reachable. If `start-channel.sh` crashed, restart it: `docker compose exec -d assistant /app/bin/start-channel.sh`.
+- Cron firing requires a Claude Code session to be reachable inside the container. The channel session you opened with `docker compose exec -it assistant claude --channels …` counts. If your terminal is closed (or the laptop slept), no Claude session is running and crons can't execute. Open a new channel session to bring it back.
 
 To list all crons created by a given install: `CronList` inside that container, or filter by name prefix `cgtd-${install_id}-` if you have multiple.
 

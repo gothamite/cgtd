@@ -35,7 +35,7 @@ Plugin install is something only the user can do (it requires interactive plugin
 > ```
 > The default marketplace is `claude-plugins-official`. If `/plugin list` shows your Telegram spec under a different marketplace, tell me the exact spec.
 
-Wait for the user to paste their `/plugin list` output or confirm verbally. If the marketplace differs from `claude-plugins-official`, instruct them to set `CGTD_CHANNEL_SPEC=plugin:telegram@<their-marketplace>` in `.env` (host shell, then `docker compose up -d` to reload).
+Wait for the user to paste their `/plugin list` output or confirm verbally. If the marketplace differs from `claude-plugins-official`, tell them to substitute it on the command line when they start the channel session at the end of this skill.
 
 ### 2. Configure the bot token
 
@@ -75,19 +75,18 @@ Print, in the user's terminal:
 >
 > Strongly recommended: use **Telegram Desktop** for the next phase — you'll be opening Google and Notion authorization links, and they need to open in a browser on this same computer (the OAuth redirects come back to `localhost:8000` here).
 >
-> Before you message the bot, start the long-running channel session so it's listening:
+> Before you message the bot, exit this session and open a new one subscribed to the Telegram channel — it's the live Claude that will receive your messages:
 >
 > ```
 > exit
-> docker compose exec -d assistant /app/bin/start-channel.sh
-> docker compose exec assistant tail -f /data/channel.log   # optional, watch it work
+> docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
 > ```
 >
-> Then DM your bot `/gtd-config`.
+> (Substitute your marketplace if it isn't `claude-plugins-official`.) Keep that terminal open — the channel session lives only while the terminal is up. Then DM your bot `/gtd-config` from Telegram Desktop.
 
 Exit.
 
 ## Failure modes
 
 - User skips a sub-step (e.g. doesn't pair) → next step's verification fails → re-prompt with the exact command to run, don't advance.
-- `.env` missing Google client id/secret → record warning, continue (Google OAuth will fail later in the interview, at which point the user is told to fix `.env` and restart the channel session).
+- `.env` missing Google client id/secret → record warning, continue (Google OAuth will fail later in the interview, at which point the user is told to fix `.env` and restart the container with `docker compose up -d`).

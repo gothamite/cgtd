@@ -4,11 +4,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git jq python3 python3-pip pipx tini unzip \
-      bsdextrautils procps \
+      procps \
     && rm -rf /var/lib/apt/lists/*
-# bsdextrautils provides `script` (PTY wrapper for start-channel.sh).
-# procps provides `pkill`/`ps`/`kill` — needed for managing long-running
-# channel session and for any user debugging that involves listing processes.
+# procps provides `pkill`/`ps`/`kill` — needed for any user debugging that
+# involves listing or killing processes inside the container.
 
 # uv / uvx for workspace-mcp
 RUN pipx install uv && pipx ensurepath

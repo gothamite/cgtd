@@ -35,13 +35,7 @@ After install:
 /plugin list
 ```
 
-Note the exact spec line (e.g. `plugin:telegram@claude-plugins-official`). If it's not the default, set in `.env`:
-
-```
-CGTD_CHANNEL_SPEC=plugin:telegram@<your-marketplace>
-```
-
-The install argument is `<plugin-name>@<marketplace>`. The channel spec used later by `start-channel.sh` is `plugin:<plugin-name>@<marketplace>` — same `<marketplace>`, prefixed with `plugin:`.
+Note the exact spec line (e.g. `plugin:telegram@claude-plugins-official`). You'll paste it on the command line when you start the channel session in Step 5. The install argument is `<plugin-name>@<marketplace>`; the channel spec is `plugin:<plugin-name>@<marketplace>` — same `<marketplace>`, prefixed with `plugin:`.
 
 ## Step 3 — configure the bot token
 
@@ -60,20 +54,18 @@ The Telegram channel uses a sender allowlist to prevent prompt injection. The cg
 3. The plugin generates a pairing code; the access skill surfaces it and asks for your approval.
 4. Once approved, the bot only forwards messages from you to Claude. Anyone else messaging it is dropped silently.
 
-## Step 5 — start the long-running channel session
+## Step 5 — start the channel session
 
-Exit Claude Code and start the channel listener:
-
-```bash
-exit
-docker compose exec -d assistant /app/bin/start-channel.sh
-```
-
-This runs `claude --channels <spec>` in a restart loop. Logs land in `/data/channel.log`:
+Exit Claude Code, then open a new in-container session subscribed to the Telegram channel:
 
 ```bash
-docker compose exec assistant tail -f /data/channel.log
+exit                                                                                  # back to host
+docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
 ```
+
+(Substitute the marketplace if yours isn't `claude-plugins-official`.) This is your **live** Claude session — every Telegram message sent to your bot will appear in this terminal as a `<channel source="telegram" ...>` tag, and Claude will process it. Keep the terminal open.
+
+> **Lifetime note.** This session lives only as long as the terminal is open. Close the terminal and the bot stops responding. For 24/7 operation, run on a VPS in `tmux`/`screen`, or keep the terminal open with the laptop on (e.g. macOS users with "prevent sleeping" enabled in Energy settings can leave the session running while the lid is closed).
 
 ## Step 6 — finish setup over Telegram (Phase 2)
 
@@ -93,11 +85,10 @@ The bot interviews you over chat. See [`quickstart.md`](quickstart.md) Section 4
 - Schedule preset.
 - Cron job toggles (each one explicit; no batch default).
 
-When done, restart the channel session so the overlay loads:
+When done, exit the current channel session (Ctrl+C in the terminal where it's running) and start a new one so the overlay loads:
 
 ```bash
-docker compose restart assistant
-docker compose exec -d assistant /app/bin/start-channel.sh
+docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
 ```
 
 ## Default routing behavior (post-init)
@@ -112,7 +103,7 @@ Once Phase 2 is complete, every inbound Telegram message is routed by the `inbox
 ## Troubleshooting
 
 - **Bot replies but Inbox empty** — `/gtd-config` not yet completed. DM your bot `/gtd-config` to resume.
-- **Bot doesn't reply at all** — channel session crashed. Check `/data/channel.log`. Common causes: Claude Code logged out (run `claude login` again), plugin uninstalled, bot token revoked.
+- **Bot doesn't reply at all** — channel session crashed or terminal closed. Check the terminal where you ran `claude --channels …`. Common causes: Claude Code logged out (run `claude login` again), plugin uninstalled, bot token revoked, terminal closed by accident.
 - **"blocked by org policy"** when starting channel — your claude.ai org disabled channels. See https://code.claude.com/docs/en/channels#enterprise-controls.
 - **OAuth link doesn't redirect** — Telegram Desktop on the Docker host machine opens links in the host's default browser; the redirect to `localhost:8000` works there. Mobile Telegram opens in the phone's browser, which can't reach localhost. Use Telegram Desktop on the Docker host for OAuth steps.
 - **Two assistants, same bot** — don't. Each assistant needs its own bot, or messages collide.
