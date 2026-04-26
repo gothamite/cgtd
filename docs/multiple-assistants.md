@@ -24,7 +24,7 @@ Each container gets its own `./data-work/` and `./data-personal/` volume.
 
 ## Checklist for a clean second assistant
 
-- [ ] Separate Telegram bot (separate `TELEGRAM_BOT_TOKEN` in its `.env`).
+- [ ] Separate Telegram bot. The bot token is configured per container via `/telegram:configure` inside Claude Code (not via `.env`); each container's plugin stores its own token under `/data/claude-home/`.
 - [ ] Separate Notion integration token (or the same one if both assistants share databases — usually you don't want this).
 - [ ] Separate Notion databases (or the same parent workspace, different databases).
 - [ ] Separate Google OAuth client? **Optional**. You can use the same Cloud project + same `client_id` for multiple containers — each container's tokens are independent. Use a different project only if you want hard quota / audit isolation between assistants.
