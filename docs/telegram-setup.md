@@ -25,7 +25,7 @@ If it's your first session ever, Claude Code prompts `claude login` — complete
 Once logged in, in Claude Code:
 
 ```
-/plugin install telegram@<official-marketplace>
+/plugin install telegram@anthropic
 ```
 
 The exact marketplace identifier may evolve during the research preview. Run `/plugin list` after install to verify the spec, then put that exact spec into the `CGTD_CHANNEL_SPEC` env var (see Step 5).
@@ -50,9 +50,21 @@ The Telegram channel uses a sender allowlist to prevent prompt injection. Pair y
 
 Now the bot only forwards messages from you to Claude. Anyone else who messages the bot is dropped silently.
 
-## Step 5 — start the long-running channel session
+## Step 5 — finish bootstrap (run /init-cgtd)
 
-The bot only delivers messages while a Claude Code session is running with the channel flag. Start a long-running session:
+In the same Claude Code session, run the bootstrap:
+
+```
+/init-cgtd
+```
+
+The init skill auto-detects the existing Telegram pairing and asks you to confirm the chat_id. It then walks you through Google OAuth, Notion, and the schedule preset. See [`quickstart.md`](quickstart.md) Step 4 for the full walkthrough.
+
+`/init-cgtd` must run **before** the long-running channel session — otherwise crons aren't armed and the inbox-router has no Notion DB IDs to route to.
+
+## Step 6 — start the long-running channel session
+
+With config in place, start the channel listener:
 
 ```bash
 docker compose exec -d assistant /app/bin/start-channel.sh
@@ -64,25 +76,15 @@ This runs `claude --channels <spec>` in a restart loop. Logs land in `/data/chan
 docker compose exec assistant tail -f /data/channel.log
 ```
 
-If your plugin spec differs from the default (`plugin:telegram@anthropic-official`), set it in `.env`:
+If your plugin spec differs from the default (`plugin:telegram@anthropic`), set it in `.env`:
 
 ```
 CGTD_CHANNEL_SPEC=plugin:telegram@<your-marketplace>
 ```
 
-## Step 6 — finish setup
+The install argument format is `<plugin-name>@<marketplace>`; the channel spec format is `plugin:<plugin-name>@<marketplace>`. Same `<marketplace>` value, just prefixed with `plugin:`.
 
-With the channel running, send your bot any message — it should land in your Notion Inbox via the `inbox-router` skill.
-
-If you haven't run `/init-cgtd` yet, do it now in a separate exec session:
-
-```bash
-docker compose exec assistant claude
-# inside Claude:
-/init-cgtd
-```
-
-The init skill auto-detects the existing Telegram pairing and skips the chat_id question.
+After the channel session is up, send your bot any message — it should land in your Notion Inbox with a 📥 reaction.
 
 ## Default routing behavior
 

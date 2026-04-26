@@ -17,21 +17,35 @@ Built as opinionated, ready-to-run Docker containers — one container per assis
 ## Quick start (local Docker)
 
 ```bash
-git clone https://github.com/<you>/cgtd.git
+git clone https://github.com/gothamite/cgtd.git
 cd cgtd
 cp .env.example .env
 # fill in .env (Google OAuth client + Notion token) — see docs/{google,notion}-setup.md
 docker compose up -d
 docker compose exec assistant claude
 # first time → claude login (browser OAuth, claude.ai)
-# inside Claude:  /plugin install telegram@<official-marketplace>
+# inside Claude:  /plugin install telegram@anthropic
 #                 /telegram:configure   (paste bot token)
 #                 /telegram:access      (approve pairing after DMing your bot)
 #                 /init-cgtd             (full interactive bootstrap)
 docker compose exec -d assistant /app/bin/start-channel.sh
 ```
 
-The init skill walks you through everything else (10 minutes): timezone, Telegram chat link, Google OAuth for each account, Drive folder, Notion DB URLs, schedule preset. When done, your assistant is live and the four cron jobs are armed; the channel session keeps the Telegram bot listening 24/7.
+The init skill walks you through everything else: timezone, Telegram chat link, Google OAuth for each account, Drive folder, Notion DB URLs, schedule preset. When done, your assistant is live and the four cron jobs are armed; the channel session keeps the Telegram bot listening 24/7.
+
+**Time budget:** ~20 minutes if your Google Cloud project, Notion integration, and Telegram bot already exist. ~45 minutes if you need to create them from scratch (the per-prerequisite docs walk you through each one).
+
+**Slash commands inside Claude Code (handled by the `inbox-router` skill):**
+
+| Command | What it does |
+|---|---|
+| `/init-cgtd` | Run / re-run the bootstrap |
+| `/cgtd-reauth <email>` | Re-authorize a Google account when its token expires |
+| `/morning`, `/evening` | Trigger the corresponding skill on demand |
+| `/inbox` | Process the Notion Inbox now |
+| `/status` | Show last-ok timestamps for each cron job |
+
+Plain Telegram messages (no `/`) drop into your Notion Inbox — the default behavior.
 
 Full guide: [`docs/quickstart.md`](docs/quickstart.md).
 

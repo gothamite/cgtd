@@ -90,7 +90,15 @@ In dev mode (compose override with `./skills:/app/skills` bind mount), edits to 
 
 ## Cron model
 
-Crons are managed by Claude Code's built-in cron system (the `CronCreate` tool). They are scoped to the Anthropic account, not the container — but each cron's `prompt` calls the skill explicitly with `install_dir=/data`, and skills use `$CGTD_DATA_DIR` (always `/data` inside the container) for state. So a cron created in container A only does anything useful when the container is running. If A is down at fire time, the run is missed and the SessionStart catch-up handles it on next start.
+Crons are managed by Claude Code's built-in cron system (the `CronCreate` tool). They are scoped to the **claude.ai account**, not the container or the Unix host. The cron entry is stored on Anthropic's side and fires by spawning a Claude Code session that runs the configured prompt; the prompt invokes a skill, which uses `$CGTD_DATA_DIR=/data` to find its state. So a cron only does useful work while the container with the matching `/data` volume is reachable.
+
+If the container is down or the channel session isn't running at fire time, the run is missed. The next SessionStart inside the container reads `cron-log.sh last-ok <job>` for each configured job; if a firing was expected more than `interval + 30 min` ago, it invokes the skill once with a catch-up note. Multiple missed intervals collapse to one catch-up — state has moved on.
+
+**Debugging a cron that didn't fire:**
+- Inside Claude Code: `CronList` shows everything, including failures. Filter by `cgtd-${install_id}-` prefix to see this install's jobs.
+- Inside the container: `cat /data/cron-log.jsonl` is the run history. `/data/channel.log` shows the long-running channel session.
+- `docker compose exec assistant /app/bin/cron-log.sh last-ok <job>` returns the ISO timestamp of the last successful run.
+- Cron firing requires the channel session (or any Claude Code session inside this container) to be reachable. If `start-channel.sh` crashed, restart it: `docker compose exec -d assistant /app/bin/start-channel.sh`.
 
 To list all crons created by a given install: `CronList` inside that container, or filter by name prefix `cgtd-${install_id}-` if you have multiple.
 

@@ -19,7 +19,7 @@ exec sudo -u $USER bash  # re-login for group
 ## Deploy
 
 ```bash
-git clone https://github.com/<you>/cgtd.git
+git clone https://github.com/gothamite/cgtd.git
 cd cgtd
 cp .env.example .env
 nano .env   # paste secrets

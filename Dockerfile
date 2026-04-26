@@ -14,8 +14,10 @@ ENV PATH="/root/.local/bin:${PATH}"
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 
-# Claude Code CLI (must be 2.1.80+ for channels)
-RUN npm install -g @anthropic-ai/claude-code
+# Claude Code CLI — pinned. Channels require 2.1.80+. Bump intentionally;
+# floating "latest" risks a silent breaking change between rebuilds.
+ARG CLAUDE_CODE_VERSION=2.1.83
+RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
 # App
 WORKDIR /app

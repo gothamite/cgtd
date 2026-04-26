@@ -62,10 +62,10 @@ Open each database (and the Archive page). Top-right "Share" → "Connections" �
 
 Open each database and copy its URL. Format:
 ```
-https://www.notion.so/<workspace>/<32-char-hex-id>?v=...
+https://www.notion.so/<workspace>/<title-slug>-<32-char-hex>?v=...
 ```
 
-The 32-char hex (with dashes) is the data_source ID. The init skill extracts it for you when you paste the URL.
+The 32-char hex at the **end** of the path (immediately before `?v=`) is the data_source ID. The slug before it is decorative and varies. Just paste the whole URL — the init skill extracts the ID for you.
 
 For the archive **page**, copy its page URL the same way.
 

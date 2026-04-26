@@ -11,7 +11,7 @@ Invoked manually as `/init-cgtd`. Runs interactively in the terminal where the u
 
 1. Read `/data/config.json` if it exists. If yes → present a numbered menu: «1) reconfigure user 2) reconfigure Telegram 3) reconfigure Google 4) reconfigure Notion 5) reconfigure schedule 6) reconcile crons 7) full re-init 0) exit». Branch to the chosen section. Otherwise proceed with full init below.
 2. Read `install_id` from `/data/install_id` (entrypoint seeds it). Treat as immutable.
-3. Read env vars: `ANTHROPIC_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `TELEGRAM_BOT_TOKEN`, `NOTION_TOKEN`. Warn (don't abort) if any are missing — sections that need them will be skippable.
+3. Read env vars: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `NOTION_TOKEN`. Warn (don't abort) if any are missing — sections that need them will be skippable. **Do not** read `ANTHROPIC_API_KEY` (channels require claude.ai login, not API keys) or `TELEGRAM_BOT_TOKEN` (the bot token lives inside the Telegram channel plugin's own config, set via `/telegram:configure` — not in `.env`).
 
 ## Section 1 — user
 
@@ -23,8 +23,8 @@ Ask, in order:
 ## Section 2 — Telegram
 
 - «Do you want a Telegram-driven inbox? [Y/n]». If `n` → set `telegram.enabled=false`, skip rest of section.
-- If env `TELEGRAM_BOT_TOKEN` is empty → walk through `docs/telegram-setup.md`: BotFather → token → put in `.env` → `docker compose up -d` to reload. Pause init until user confirms.
-- Ask for `chat_id`. Offer to discover it: «send any message to your bot now; I'll fetch the latest update and extract chat_id». Use a curl against `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates`.
+- The bot token is **not** in `.env`. The Telegram channel plugin stores it itself (set via `/telegram:configure`). If the user hasn't run `/plugin install telegram@<marketplace>`, `/telegram:configure`, and `/telegram:access` yet, point them at `docs/telegram-setup.md` Steps 2–4 and pause until they confirm the plugin is installed and a pairing exists.
+- Ask the user to confirm their Telegram `chat_id` (visible in `/telegram:access` output, or as the `chat_id` attribute on inbound `<channel>` tags once the channel session is running).
 - Save `chat_id`. Set `default_action` = `inbox`.
 
 ## Section 3 — Google

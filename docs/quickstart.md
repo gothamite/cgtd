@@ -1,6 +1,6 @@
 # Quickstart
 
-End-to-end setup on your laptop. ~20 minutes.
+End-to-end setup on your laptop. **~20 minutes** if you already have a Google Cloud project, a Notion integration, and a Telegram bot. **~45 minutes** if you need to create them from scratch (each linked doc covers ~10 minutes).
 
 ## 0. Prerequisites
 
@@ -13,7 +13,7 @@ End-to-end setup on your laptop. ~20 minutes.
 ## 1. Clone + configure
 
 ```bash
-git clone https://github.com/<you>/cgtd.git
+git clone https://github.com/gothamite/cgtd.git
 cd cgtd
 cp .env.example .env
 $EDITOR .env  # paste GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, NOTION_TOKEN
@@ -22,6 +22,7 @@ $EDITOR .env  # paste GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, NOTION
 ## 2. Start the container and log in to Claude
 
 ```bash
+mkdir -p data         # ensures correct ownership before docker creates it root-owned (Linux footgun)
 docker compose up -d
 docker compose exec assistant claude
 ```
@@ -33,12 +34,14 @@ First session prompts `claude login` — complete OAuth in your browser. The cre
 Inside Claude Code:
 
 ```
-/plugin install telegram@<official-marketplace>
-/telegram:configure        # paste your bot token
-/telegram:access           # approve pairing after DMing your bot
+/plugin marketplace list                # confirm the marketplace your account has access to
+/plugin install telegram@<marketplace>  # default below assumes 'anthropic' — replace if /plugin list shows different
+/telegram:configure                     # paste your bot token (NOT in .env — the plugin stores it itself)
+/telegram:access                        # approve pairing after DMing your bot
+/plugin list                            # confirm the install succeeded; copy the exact spec
 ```
 
-Verify with `/plugin list`. Note the exact plugin spec — if it differs from the default, set `CGTD_CHANNEL_SPEC` in `.env`.
+The install argument is `<plugin-name>@<marketplace>`; the channel spec used later is `plugin:<plugin-name>@<marketplace>` — same `<marketplace>`, just prefixed with `plugin:`. If your marketplace name isn't `anthropic`, set `CGTD_CHANNEL_SPEC=plugin:telegram@<your-marketplace>` in `.env`.
 
 Full Telegram walkthrough: [`telegram-setup.md`](telegram-setup.md).
 
@@ -79,7 +82,7 @@ docker compose exec assistant tail -f /data/channel.log
 
 Send your bot any message — it should land in Notion Inbox with a 📥 reaction.
 
-In another Claude Code session:
+The slash commands below are recognized by the `inbox-router` skill (which the channel session loads automatically). You can run them either as Telegram messages to your bot, or in an interactive Claude Code session:
 
 ```bash
 docker compose exec assistant claude
@@ -87,9 +90,12 @@ docker compose exec assistant claude
 
 ```
 /morning      # runs morning-ritual immediately
+/evening      # runs evening-review immediately
 /inbox        # processes pending Notion Inbox entries
 /status       # shows last-ok timestamps for each cron
 ```
+
+If `/status` reports a cron hasn't fired in a while, see [`architecture.md` § Cron model](architecture.md#cron-model) for how Claude Code's cron system works and how missed-run catch-up happens at SessionStart.
 
 ## 7. Day-to-day
 
