@@ -2,10 +2,20 @@
 
 End-to-end setup. **~25 minutes** if all prerequisites exist; **~50 minutes** from scratch.
 
-The install flow has two phases:
+## Three places you'll be working
 
-- **Phase 1 (terminal)** — Docker, Claude Code login, Telegram channel plugin, bot pairing.
-- **Phase 2 (Telegram chat)** — everything else: locale, Google OAuth, Notion OAuth, Drive folder, GTD interview, schedule, crons.
+Each step in this doc is labeled with one of these tags so you always know where to type:
+
+- **`[host]`** — your laptop's normal terminal. Runs git, docker, your editor.
+- **`[claude-in-container]`** — Claude Code running *inside* the cgtd container. Has access to the cgtd skills (`/init-cgtd`, `/gtd-config`, etc.) and the project's MCPs. Entered with `docker compose exec assistant claude`.
+- **`[telegram]`** — chat with your bot in the Telegram app.
+
+**Heads-up:** if you have Claude Code installed on your laptop too, you might be tempted to run cgtd skills there. Don't — the skills only exist inside the container. A host-side Claude can help you type the `[host]` steps if you want, but it can't run `/init-cgtd` or `/gtd-config`.
+
+## Two-phase install flow
+
+- **Phase 1 (terminal)** — Docker, Claude Code login, Telegram channel plugin, bot pairing. Mostly `[host]` with one `[claude-in-container]` excursion for `/init-cgtd`.
+- **Phase 2 (Telegram chat)** — everything else: locale, Google OAuth, Notion OAuth, Drive folder, GTD interview, schedule, crons. All `[telegram]`.
 
 ## 0. Prerequisites
 
@@ -15,7 +25,7 @@ The install flow has two phases:
 - **A Notion account** — no token to paste; OAuth happens during the Telegram interview. The interview can also create the GTD databases for you if you don't have any yet. See [`notion-setup.md`](notion-setup.md) for what gets created and how access restriction works.
 - **A Telegram bot** — see [`telegram-setup.md`](telegram-setup.md). Required.
 
-## 1. Clone + configure
+## 1. Clone + configure  `[host]`
 
 ```bash
 git clone https://github.com/gothamite/cgtd.git
@@ -26,19 +36,21 @@ $EDITOR .env  # paste GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET
 
 That's the only secrets you need in `.env`. Notion and Telegram are configured later (Notion via OAuth in Phase 2; Telegram bot token via the channel plugin's own `/telegram:configure`).
 
-## 2. Start the container and log in to Claude
+## 2. Start the container and log in to Claude  `[host]` → `[claude-in-container]`
 
 ```bash
-mkdir -p data         # prevents root-owned dir on Linux
-docker compose up -d
-docker compose exec assistant claude
+mkdir -p data                            # [host] — prevents root-owned dir on Linux
+docker compose up -d                     # [host]
+docker compose exec assistant claude     # [host] — this command opens Claude Code INSIDE the container
 ```
+
+That last command leaves you sitting at a Claude Code prompt that's running *inside* the container. From this point until you `exit`, every `/command` you type is `[claude-in-container]`.
 
 First session prompts `claude login` — complete OAuth in your browser. The credential persists in `./data/claude-home/`.
 
-## 3. Phase 1 — terminal bootstrap
+## 3. Phase 1 — terminal bootstrap  `[claude-in-container]`
 
-Inside Claude Code, run:
+At the in-container Claude Code prompt:
 
 ```
 /init-cgtd
@@ -50,15 +62,15 @@ The skill walks you through:
 2. **Configure the bot token** — `/telegram:configure`, paste the BotFather token. (The plugin stores the token itself — not in `.env`.)
 3. **Pair your Telegram account** — `/telegram:access`, DM your bot, approve the pairing.
 
-When the skill prints "✓ Bootstrap done", exit Claude Code and start the long-running channel session:
+When the skill prints "✓ Bootstrap done", `exit` Claude Code (back to `[host]`), then start the long-running channel session:
 
 ```bash
-exit
-docker compose exec -d assistant /app/bin/start-channel.sh
-docker compose exec assistant tail -f /data/channel.log    # optional, watch it work
+exit                                                               # [claude-in-container] → drops you back to [host]
+docker compose exec -d assistant /app/bin/start-channel.sh         # [host]
+docker compose exec assistant tail -f /data/channel.log            # [host], optional — watch it work
 ```
 
-## 4. Phase 2 — Telegram chat
+## 4. Phase 2 — Telegram chat  `[telegram]`
 
 Open **Telegram Desktop** on the same computer that's running Docker. (You can use mobile Telegram for the chat, but Google and Notion authorization links must be opened in a browser on the Docker host — Telegram Desktop on that host is the smoothest path.)
 
@@ -81,18 +93,18 @@ The bot interviews you over chat. In order:
 7. **Schedule** — pick a rhythm preset (flex / 9-to-5 / shift / custom).
 8. **Cron jobs** — toggle each one explicitly (no batch "enable all" default).
 
-When done, the bot tells you to restart the channel session so the new skill overlay loads:
+When done, the bot tells you to restart the channel session so the new skill overlay loads. Back in `[host]`:
 
 ```bash
-docker compose restart assistant
-docker compose exec -d assistant /app/bin/start-channel.sh
+docker compose restart assistant                                # [host]
+docker compose exec -d assistant /app/bin/start-channel.sh      # [host]
 ```
 
-## 5. Verify
+## 5. Verify  `[telegram]` or `[claude-in-container]`
 
 Send your bot any message — it should land in your Notion Inbox with a 📥 reaction.
 
-For deeper checks, run any of these as Telegram messages or in `docker compose exec assistant claude`:
+For deeper checks, run any of these as Telegram messages, or open a fresh in-container Claude session (`[host]`: `docker compose exec assistant claude`) and run them there:
 
 ```
 /morning      # runs morning-ritual immediately

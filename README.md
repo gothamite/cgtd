@@ -25,8 +25,17 @@ You bring your own credentials for all three. Nothing is shared with the project
 
 ## Quick start (local Docker)
 
-The install flow is: terminal bootstrap → restart → finish in Telegram chat.
+You'll be working in **three places**. Knowing which is which avoids confusion:
 
+| Where | What runs there | How to enter |
+|---|---|---|
+| **Host shell** (your laptop's terminal) | git, docker, file editing | Just your normal terminal |
+| **In-container Claude Code** | `/init-cgtd` and other skills; sees the cgtd MCPs | `docker compose exec assistant claude` |
+| **Telegram chat with your bot** | `/gtd-config` interview, daily use | DM your bot once Phase 1 is done |
+
+Steps:
+
+**1. Host shell** — clone, configure, start the container:
 ```bash
 git clone https://github.com/gothamite/cgtd.git
 cd cgtd
@@ -34,18 +43,29 @@ cp .env.example .env
 $EDITOR .env             # paste GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET
 mkdir -p data            # prevent root-owned dir on Linux
 docker compose up -d
-docker compose exec assistant claude
 ```
 
-First Claude Code session prompts `claude login` — complete OAuth in your browser. Then inside Claude:
-
+**2. In-container Claude Code** — terminal bootstrap (Phase 1):
+```bash
+docker compose exec assistant claude    # entered from host shell; opens Claude Code inside the container
+```
+First time prompts `claude login` (browser OAuth). Then inside Claude:
 ```
 /init-cgtd
 ```
+This walks you through three things only: install the Telegram channel plugin, configure the bot token, pair your account. When it prints "✓ Bootstrap done" and tells you to exit — exit.
 
-The terminal bootstrap walks you through three things: install the Telegram channel plugin, configure the bot token, pair your account. Then it tells you to exit, start the long-running channel session, and DM your bot `/gtd-config`.
+**3. Host shell** — start the long-running channel session:
+```bash
+docker compose exec -d assistant /app/bin/start-channel.sh
+```
 
-The rest of setup — locale, name, timezone, Google OAuth per account, Notion OAuth, Drive folder, GTD interview, schedule, cron jobs — happens entirely in Telegram. **Use Telegram Desktop** for this phase: you'll be opening Google and Notion authorization links, and they need to land in a browser on the same computer running Docker.
+**4. Telegram chat** — finish setup (Phase 2):
+DM your bot `/gtd-config`. The rest — locale, timezone, Google OAuth per account, Notion OAuth, Drive folder, GTD interview, schedule, cron jobs — happens in chat.
+
+> **Use Telegram Desktop** on the same computer running Docker. You'll be opening Google and Notion authorization links, and they need to land in a browser on the Docker host (the OAuth redirects come back to `localhost:8000` there).
+
+> **Note on host-side Claude Code:** if you have Claude Code installed on your laptop and want it to drive Steps 1 and 3 for you, that's fine — but those host-side steps are just shell commands. The cgtd skills (`/init-cgtd`, `/gtd-config`, etc.) only exist *inside* the container. Don't try to run them from a host-side Claude session.
 
 Full guide: [`docs/quickstart.md`](docs/quickstart.md).
 
