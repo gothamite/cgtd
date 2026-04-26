@@ -1,0 +1,5 @@
+- [Default drop-to-Inbox behavior](feedback_default_inbox.md) — unclassified messages go straight to Notion Inbox, no question asked
+- [Implicit date parsing](feedback_implicit_dates.md) — phrases like "by end of winter", "до конца зимы", "EOQ" are real deadlines, parse before routing
+- [Contextual deadline inference](feedback_contextual_deadlines.md) — don't default to Someday/Maybe; reason from date, season, weather, use-case
+- [Honesty over false confidence](feedback_honesty_over_confidence.md) — say "I don't know" when sources are weak; don't bluff plausible-sounding answers
+- [Never fabricate URLs](feedback_no_fabricated_urls.md) — copy URLs verbatim from tool results; don't reconstruct page IDs from memory

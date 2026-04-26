@@ -1,0 +1,16 @@
+services:
+  assistant:
+    build: .
+    image: cgtd
+    container_name: cgtd
+    env_file: .env
+    environment:
+      - CGTD_DATA_DIR=/data
+      - CGTD_CHANNEL_SPEC=${CGTD_CHANNEL_SPEC:-plugin:telegram@anthropic-official}
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:8000:8000"   # OAuth callback for google-workspace; bound to localhost
+    stdin_open: true
+    tty: true
+    restart: unless-stopped

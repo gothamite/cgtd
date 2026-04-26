@@ -1,0 +1,35 @@
+# Example: two parallel assistants on the same host (work + personal).
+# Copy this to docker-compose.override.yml or use as a standalone compose file.
+# Each assistant has its own .env, its own data volume, its own Telegram bot,
+# and its own Google tokens. Containers cannot see each other.
+
+services:
+  work:
+    build: .
+    image: cgtd
+    container_name: cgtd-work
+    env_file: .env.work
+    environment:
+      - CGTD_DATA_DIR=/data
+    volumes:
+      - ./data-work:/data
+    ports:
+      - "127.0.0.1:8001:8000"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  personal:
+    build: .
+    image: cgtd
+    container_name: cgtd-personal
+    env_file: .env.personal
+    environment:
+      - CGTD_DATA_DIR=/data
+    volumes:
+      - ./data-personal:/data
+    ports:
+      - "127.0.0.1:8002:8000"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped

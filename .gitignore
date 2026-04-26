@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+data/
+data-*/
+volumes/
+*.log
+*.jsonl
+.DS_Store
+.idea/
+.vscode/

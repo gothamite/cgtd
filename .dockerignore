@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+data/
+data-*/
+volumes/
+*.log
+*.jsonl
+docs/
+README.md
+LICENSE
+.gitignore
