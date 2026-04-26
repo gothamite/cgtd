@@ -58,7 +58,7 @@ At the in-container Claude Code prompt:
 
 The skill walks you through:
 
-1. **Install the Telegram channel plugin** — `/plugin marketplace list`, then `/plugin install telegram@<your-marketplace>`. The default assumes `anthropic`; if `/plugin list` shows different, set `CGTD_CHANNEL_SPEC=plugin:telegram@<your-marketplace>` in `.env`.
+1. **Install the Telegram channel plugin** — `/plugin marketplace list`, then `/plugin install telegram@<your-marketplace>`. The default is `claude-plugins-official`; if `/plugin list` shows different, set `CGTD_CHANNEL_SPEC=plugin:telegram@<your-marketplace>` in `.env`.
 2. **Configure the bot token** — `/telegram:configure`, paste the BotFather token. (The plugin stores the token itself — not in `.env`.)
 3. **Pair your Telegram account** — `/telegram:access`, DM your bot, approve the pairing.
 

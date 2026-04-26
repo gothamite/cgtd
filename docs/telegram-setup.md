@@ -26,7 +26,7 @@ If first session ever, `claude login` runs — complete OAuth in your browser. T
 
 ```
 /plugin marketplace list                 # confirm your marketplace name
-/plugin install telegram@<marketplace>   # default assumes 'anthropic'
+/plugin install telegram@<marketplace>   # default is 'claude-plugins-official'
 ```
 
 After install:
@@ -35,7 +35,7 @@ After install:
 /plugin list
 ```
 
-Note the exact spec line (e.g. `plugin:telegram@anthropic`). If it's not the default, set in `.env`:
+Note the exact spec line (e.g. `plugin:telegram@claude-plugins-official`). If it's not the default, set in `.env`:
 
 ```
 CGTD_CHANNEL_SPEC=plugin:telegram@<your-marketplace>
@@ -45,21 +45,20 @@ The install argument is `<plugin-name>@<marketplace>`. The channel spec used lat
 
 ## Step 3 — configure the bot token
 
-```
-/telegram:configure
-```
+When you run `/init-cgtd` (next section), the cgtd init skill **invokes the `telegram:configure` skill for you** via Claude Code's Skill tool — you don't need to type `/telegram:configure` yourself. Just answer the bot-token prompt that appears.
 
-Paste your bot token when asked. The token is stored inside the plugin's data directory under `/data/claude-home/` and persists across container restarts.
+If you want to (re-)run it standalone outside of `/init-cgtd`, you can also invoke it directly: ask Claude to "configure the Telegram channel" or use `/telegram:configure`. The token is stored inside the plugin's data directory under `/data/claude-home/` and persists across container restarts.
+
+> **Note:** while the plugin is installed but not yet paired, the in-container Claude session may show "Telegram MCP" connection errors. That's expected during this window — the channel plugin can't connect until pairing is complete. Ignore the errors and continue.
 
 ## Step 4 — pair your Telegram account
 
-The Telegram channel uses a sender allowlist to prevent prompt injection. Pair yourself:
+The Telegram channel uses a sender allowlist to prevent prompt injection. The cgtd `/init-cgtd` skill handles this for you — invokes the `telegram:access` skill and prompts you to DM your bot. Specifically:
 
-1. In Telegram, DM your bot any message (e.g. "hi").
-2. The bot replies with a pairing code.
-3. In Claude Code, run `/telegram:access` and approve the pairing.
-
-Now the bot only forwards messages from you to Claude. Anyone else who messages it is dropped silently.
+1. The init skill invokes `telegram:access`.
+2. It tells you to DM your bot any message (e.g. "hi") from Telegram.
+3. The plugin generates a pairing code; the access skill surfaces it and asks for your approval.
+4. Once approved, the bot only forwards messages from you to Claude. Anyone else messaging it is dropped silently.
 
 ## Step 5 — start the long-running channel session
 

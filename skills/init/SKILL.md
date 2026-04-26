@@ -19,40 +19,36 @@ The Telegram channel plugin is itself an MCP and must be installed and paired be
 
 ## Procedure
 
-Walk the user through, in order:
+Walk the user through, in order. **Important nuance:** `telegram:configure` and `telegram:access` are skills shipped by the Telegram channel plugin — they are user-invocable as slash commands but you (the in-container Claude session running this skill) should also invoke them yourself via the `Skill` tool when reaching steps 2 and 3, so the user just answers the prompts you relay rather than typing `/telegram:configure` themselves and switching context.
+
+A side note for the user: while the Telegram channel plugin is installed but not yet paired, the in-container Claude session may surface `Telegram MCP` connection errors. These are **expected** during this window — ignore them and continue.
 
 ### 1. Install the Telegram channel plugin
 
-Print:
-> First, find your Claude Code marketplace and install the Telegram channel:
+Plugin install is something only the user can do (it requires interactive plugin marketplace UI). Print:
+
+> First, install the Telegram channel plugin. Run these commands here:
 > ```
 > /plugin marketplace list
 > /plugin install telegram@<marketplace>
+> /plugin list
 > ```
-> When done, type `/plugin list` and tell me the exact spec line for the Telegram plugin (e.g. `plugin:telegram@anthropic`).
+> The default marketplace is `claude-plugins-official`. If `/plugin list` shows your Telegram spec under a different marketplace, tell me the exact spec.
 
-Wait for the user to confirm. If their spec differs from the default `plugin:telegram@anthropic`, instruct them to set `CGTD_CHANNEL_SPEC=<their-spec>` in `.env`.
+Wait for the user to paste their `/plugin list` output or confirm verbally. If the marketplace differs from `claude-plugins-official`, instruct them to set `CGTD_CHANNEL_SPEC=plugin:telegram@<their-marketplace>` in `.env` (host shell, then `docker compose up -d` to reload).
 
 ### 2. Configure the bot token
 
-Print:
-> Now configure your bot. You should already have a token from BotFather (see `docs/telegram-setup.md` if not):
-> ```
-> /telegram:configure
-> ```
-> Paste the token when asked.
+Invoke the `telegram:configure` skill via the `Skill` tool: `Skill(skill="telegram:configure")`. The plugin's skill prompts the user for the bot token and stores it under `/data/claude-home/`. Don't ask the user to type `/telegram:configure` themselves — just invoke and let it run.
 
-Wait for confirmation.
+If the plugin reports the token already exists, confirm with the user whether to keep or replace.
 
 ### 3. Pair your Telegram account
 
-Print:
-> ```
-> /telegram:access
-> ```
-> Then DM your bot any message. The bot replies with a pairing code; approve it via `/telegram:access` here.
+Tell the user (in plain text):
+> Now DM your bot from Telegram — any message will do. The plugin generates a pairing code and surfaces it through the next skill we run.
 
-Wait for confirmation.
+Then invoke `Skill(skill="telegram:access")`. The plugin's skill walks the user through approving the pairing code that the channel emits when their first DM arrives. Wait for the skill to report success.
 
 ### 4. Write a stub config
 

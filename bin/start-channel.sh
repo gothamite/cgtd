@@ -12,7 +12,7 @@ LOG="$DATA/channel.log"
 
 # Channel plugin spec — verify the exact name with `/plugin list` after install.
 # Default assumes the official Telegram channel from Anthropic's marketplace.
-CHANNEL_SPEC="${CGTD_CHANNEL_SPEC:-plugin:telegram@anthropic}"
+CHANNEL_SPEC="${CGTD_CHANNEL_SPEC:-plugin:telegram@claude-plugins-official}"
 
 while true; do
   echo "[$(date -u +%FT%TZ)] starting claude with channel: $CHANNEL_SPEC" >> "$LOG"

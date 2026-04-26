@@ -6,7 +6,7 @@ services:
     env_file: .env
     environment:
       - CGTD_DATA_DIR=/data
-      - CGTD_CHANNEL_SPEC=${CGTD_CHANNEL_SPEC:-plugin:telegram@anthropic}
+      - CGTD_CHANNEL_SPEC=${CGTD_CHANNEL_SPEC:-plugin:telegram@claude-plugins-official}
     volumes:
       - ./data:/data
     ports:
