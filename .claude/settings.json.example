@@ -13,8 +13,7 @@
     },
     "notion": {
       "type": "http",
-      "url": "https://mcp.notion.com/mcp",
-      "headers": { "Authorization": "Bearer ${NOTION_TOKEN}" }
+      "url": "https://mcp.notion.com/mcp"
     }
   }
 }

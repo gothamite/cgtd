@@ -1,6 +1,6 @@
 # cgtd
 
-A self-hosted, Telegram-driven GTD assistant powered by Claude Code. Your personal "AI secretary" that reads your Gmail/Calendar across multiple Google accounts, classifies inbound items into a Notion GTD system, plans your day around your rhythm, and chats with you in Telegram.
+A self-hosted, Telegram-driven GTD assistant powered by Claude Code. Your personal AI assistant that reads your Gmail/Calendar across multiple Google accounts, classifies inbound items into a Notion GTD system adapted to *your* layout, plans your day around your rhythm, and chats with you in Telegram.
 
 Built as opinionated, ready-to-run Docker containers — one container per assistant, fully isolated. Run multiple in parallel (work / personal / shared family inbox / etc.) on your laptop or on a $6 VPS.
 
@@ -11,43 +11,61 @@ Built as opinionated, ready-to-run Docker containers — one container per assis
 - **Morning brief (08:30).** Today's calendar, Gmail 24h actionable items, overdue Next Actions, and a proposed time-blocked plan around your weekly rhythm. Asks for your approval before scheduling.
 - **Daytime sweep (every 2h).** Scans Gmail + Calendar across all your Google accounts; routes actionable items to Notion; pings you on urgent deadlines.
 - **Evening review (21:30).** Walks through today's Next Actions, asks status, rolls unfinished items forward.
-- **Multi-account Google.** Reads Gmail + Calendar from any number of Google accounts you authorize. One folder on your *primary* (personal) account's Drive is used for inbox attachments.
-- **Multi-locale.** Russian, English, German built in. Pick at init.
+- **Multi-account Google.** Reads Gmail + Calendar from any number of Google accounts you authorize. One folder on your *primary* (personal) account's Drive holds files you forward to the bot.
+- **Adapts to your Notion layout.** During setup over Telegram, the assistant interviews you about your existing GTD setup — what you call "Inbox," your Status values, whether you use a priority scheme — and rewrites its skills to match your vocabulary. If you don't have a setup yet, it creates the default one for you.
+- **Multi-locale.** Russian, English, German built in. Pick during setup.
+
+## Required services
+
+- **Notion** — GTD system lives here.
+- **Google** (Gmail / Calendar / Drive) — input + attachment storage.
+- **Telegram** — the entire UI after the initial bootstrap.
+
+You bring your own credentials for all three. Nothing is shared with the project author.
 
 ## Quick start (local Docker)
+
+The install flow is: terminal bootstrap → restart → finish in Telegram chat.
 
 ```bash
 git clone https://github.com/gothamite/cgtd.git
 cd cgtd
 cp .env.example .env
-# fill in .env (Google OAuth client + Notion token) — see docs/{google,notion}-setup.md
+$EDITOR .env             # paste GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET
+mkdir -p data            # prevent root-owned dir on Linux
 docker compose up -d
 docker compose exec assistant claude
-# first time → claude login (browser OAuth, claude.ai)
-# inside Claude:  /plugin install telegram@anthropic
-#                 /telegram:configure   (paste bot token)
-#                 /telegram:access      (approve pairing after DMing your bot)
-#                 /init-cgtd             (full interactive bootstrap)
-docker compose exec -d assistant /app/bin/start-channel.sh
 ```
 
-The init skill walks you through everything else: timezone, Telegram chat link, Google OAuth for each account, Drive folder, Notion DB URLs, schedule preset. When done, your assistant is live and the four cron jobs are armed; the channel session keeps the Telegram bot listening 24/7.
+First Claude Code session prompts `claude login` — complete OAuth in your browser. Then inside Claude:
 
-**Time budget:** ~20 minutes if your Google Cloud project, Notion integration, and Telegram bot already exist. ~45 minutes if you need to create them from scratch (the per-prerequisite docs walk you through each one).
+```
+/init-cgtd
+```
 
-**Slash commands inside Claude Code (handled by the `inbox-router` skill):**
+The terminal bootstrap walks you through three things: install the Telegram channel plugin, configure the bot token, pair your account. Then it tells you to exit, start the long-running channel session, and DM your bot `/gtd-config`.
+
+The rest of setup — locale, name, timezone, Google OAuth per account, Notion OAuth, Drive folder, GTD interview, schedule, cron jobs — happens entirely in Telegram. **Use Telegram Desktop** for this phase: you'll be opening Google and Notion authorization links, and they need to land in a browser on the same computer running Docker.
+
+Full guide: [`docs/quickstart.md`](docs/quickstart.md).
+
+## Time budget
+
+- **~25 minutes** if your Google Cloud project, Notion workspace, and Telegram bot are already created.
+- **~50 minutes** if you're creating them from scratch (each linked doc covers one prerequisite in ~10 min).
+
+## Slash commands (handled by `inbox-router`)
 
 | Command | What it does |
 |---|---|
-| `/init-cgtd` | Run / re-run the bootstrap |
-| `/cgtd-reauth <email>` | Re-authorize a Google account when its token expires |
+| `/gtd-config` | Re-run / continue the Telegram interview |
+| `/cgtd-reauth google <email>` | Re-authorize a Google account when its token expires |
+| `/cgtd-reauth notion` | Re-authorize Notion |
 | `/morning`, `/evening` | Trigger the corresponding skill on demand |
 | `/inbox` | Process the Notion Inbox now |
 | `/status` | Show last-ok timestamps for each cron job |
 
-Plain Telegram messages (no `/`) drop into your Notion Inbox — the default behavior.
-
-Full guide: [`docs/quickstart.md`](docs/quickstart.md).
+Plain Telegram messages (no `/`) drop into your Notion Inbox.
 
 ## Deploy to a VPS (DigitalOcean, etc.)
 
@@ -55,25 +73,23 @@ A $6/month droplet runs one assistant 24/7. See [`docs/deploy-digitalocean.md`](
 
 ## Multiple assistants on one host
 
-Each container is its own assistant — own Telegram bot, own Google tokens, own Notion DBs, own data volume. See [`docs/multiple-assistants.md`](docs/multiple-assistants.md) for the parallel-deploy pattern.
+Each container is its own assistant — own Telegram bot, own Google tokens, own Notion DBs, own data volume. See [`docs/multiple-assistants.md`](docs/multiple-assistants.md).
 
 ## Prerequisites
 
-- Docker (Desktop on macOS/Windows, Docker Engine on Linux)
+- Docker (Desktop on macOS/Windows, Engine on Linux)
 - A claude.ai account (Telegram channel plugin requires it; API keys do not work for channels — research preview limitation)
-- A Google Cloud project (yours — takes 5 min to create; see [`docs/google-setup.md`](docs/google-setup.md))
-- A Notion account with an integration token (optional but recommended)
-- A Telegram bot (required for the inbox-everything UX)
-
-You bring your own credentials for everything. Nothing is shared with the project author.
+- A Google Cloud project (yours — 5 min; see [`docs/google-setup.md`](docs/google-setup.md))
+- A Notion account (no token needed; OAuth happens during the Telegram interview)
+- A Telegram bot (5 min via BotFather; see [`docs/telegram-setup.md`](docs/telegram-setup.md))
 
 ## Architecture
 
-See [`docs/architecture.md`](docs/architecture.md) for the full design: how skills, crons, MCP servers, and the data volume fit together; how isolation between containers works; what's *not* isolated and why.
+See [`docs/architecture.md`](docs/architecture.md): how skills, crons, MCP servers, and the data volume fit together; how isolation between containers works; what's *not* isolated and why; how skill overlays adapt to your GTD layout.
 
-## Adapt it
+## Adapt it further
 
-The shipped skills (`skills/morning-ritual`, `skills/proactive-inbox`, etc.) are plain Markdown files. Add your own — for example, a `workday-reminder` skill that pings you at 10:33 every weekday in your local language ([example in `docs/examples/workday-reminder.md`](docs/examples/workday-reminder.md)). Drop new SKILL.md files into `skills/`, rebuild the image (or use dev-mode bind mount), edit `config.json` to add a cron entry, and you're done.
+The shipped skills are plain Markdown files. The Telegram interview already adapts them to your Notion vocabulary (writing customized copies into `/data/skills-overlay/`). For deeper changes, drop new SKILL.md files into `skills/` and rebuild the image — example in [`docs/examples/workday-reminder.md`](docs/examples/workday-reminder.md).
 
 ## License
 

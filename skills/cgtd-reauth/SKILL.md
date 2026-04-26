@@ -1,37 +1,49 @@
 ---
 name: cgtd-reauth
-description: Re-run Google OAuth for one or all configured accounts when refresh tokens expire (invalid_grant, scope drift, revoked access). Replacement for re-running full /init-cgtd.
+description: Re-run OAuth for Google account(s) or Notion when refresh tokens expire (invalid_grant, scope drift, revoked access). Replaces re-running full /gtd-config.
 ---
 
-# Re-auth a Google account
+# Re-authorize an external service
 
-Invoked as `/cgtd-reauth <email>` or `/cgtd-reauth --all`. Triggers OAuth flow for the named account(s) without touching the rest of the config.
+Invoked as:
+- `/cgtd-reauth google <email>` — single Google account
+- `/cgtd-reauth google --all` — every Google account in `config.google.accounts[]`
+- `/cgtd-reauth notion` — Notion (hosted OAuth MCP)
+
+Runs over Telegram or terminal — both work. The user opens the OAuth link on the same machine running Docker (Telegram Desktop recommended for the Telegram path).
 
 ## Pre-flight
 
-- Read `/data/config.json`. Abort if `google.accounts[]` is empty («nothing to re-auth — run /init-cgtd first»).
-- If port `8000` is not reachable from the host browser (remote VPS), print SSH local-forward command and wait for user confirmation.
+- Read `/data/config.json`. Abort if `init_complete: false` («запусти `/gtd-config` сначала»).
+- If port `8000` isn't reachable from the user's browser (remote VPS without SSH tunnel), print the SSH local-forward command and wait.
 
-## Procedure
+## Procedure — Google
 
-For each target email (single arg, or all of `config.google.accounts`):
+For each target email:
 
-1. Delete the cached token at `/data/mcp/google-workspace/<email>.json` (workspace-mcp will trigger a fresh OAuth flow on next call).
-2. Call `mcp__google-workspace__list_calendars user_google_email=<email>`. Print the returned authorization URL.
-3. Wait for the user to confirm in terminal that they completed the browser flow. Retry the `list_calendars` call. On success → move to next.
-4. On final success, print: «✓ <email> re-authorized. Cron jobs will resume on next firing.»
+1. Delete `/data/mcp/google-workspace/<email>.json` (cached token). The next API call will trigger a fresh OAuth flow.
+2. Call `mcp__google-workspace__list_calendars user_google_email=<email>` — server returns an authorization URL.
+3. Send URL via Telegram (or print to terminal). User opens on the Docker host machine, completes consent.
+4. Wait for «done». Retry `list_calendars`. On success → next account.
+5. Final reply: «✓ <email> reauthorized — cron jobs resume on next firing.»
 
-## Auto-detection from cron failures
+## Procedure — Notion
 
-When a cron skill (proactive-inbox, morning-ritual, evening-review) catches an `invalid_grant` or "auth required" error from the google-workspace MCP, it should:
+1. Clear Notion's cached OAuth token from `/data/claude-home/` (location depends on Claude Code's MCP token storage; if uncertain, advise the user to remove the `notion` MCP via `claude mcp remove notion` and re-add it via the settings.json template — the next call triggers fresh OAuth).
+2. Call `mcp__notion__notion-search` with empty query — returns OAuth URL.
+3. Send URL. User opens on Docker host, signs in, **re-picks pages to share**.
+4. Wait for «done». Retry. On success → reply «✓ Notion reauthorized».
 
-- Log fail with reason `google_auth_expired:<email>`.
-- Send one Telegram message «Google auth для <email> истёк. Запусти `/cgtd-reauth <email>` через `docker compose exec gtd claude`.»
-- Exit cleanly (do NOT loop or retry).
+## Auto-detection from skill failures
 
-The user runs the command at their convenience. No automatic retry.
+When a cron skill catches `invalid_grant` / "auth required" / "401" from either MCP:
+
+- Log fail with reason `<service>_auth_expired:<identifier>`.
+- Send one Telegram message «<service> auth для <id> истёк. Запусти `/cgtd-reauth <service> <id>`».
+- Exit cleanly. No automatic retry.
 
 ## Notes
 
-- Refresh tokens issued while the OAuth consent screen is in **Testing** status expire after 7 days. Publish the consent screen to **In production** to avoid weekly re-auth. See `docs/google-setup.md` § "Avoiding the 7-day refresh token expiry."
-- Other reasons re-auth is needed: user revoked access at myaccount.google.com/permissions, scope drift, volume corruption.
+- Refresh tokens issued while a Google OAuth consent screen is in **Testing** status expire after 7 days. Publish to **In production** to avoid weekly re-auth. See `docs/google-setup.md` § "Avoiding the 7-day refresh token expiry."
+- Notion tokens are typically long-lived. Common reasons for needing reauth: user revoked access from Notion's "Connections" panel, scope changes, volume corruption.
+- Other Google reauth triggers: revoked at myaccount.google.com/permissions, scope drift, volume restore from backup.

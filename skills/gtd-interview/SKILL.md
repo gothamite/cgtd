@@ -1,0 +1,198 @@
+---
+name: gtd-interview
+description: Telegram-driven interview that finishes setup after init-cgtd's terminal bootstrap. Asks the user about their existing Notion GTD layout (or creates one if absent), runs Google + Notion OAuth, picks a Drive folder, captures schedule preferences, and writes config.json + skill overlays adapted to the user's vocabulary. Multi-turn, resumable via /data/init-progress.json.
+---
+
+# Telegram interview (Phase 2)
+
+Triggered when the user DMs the bot `/gtd-config` (first time or to reconfigure). The whole conversation happens over Telegram. The terminal is no longer needed except for OAuth links, which the user opens on the same machine running Docker (Telegram Desktop strongly recommended).
+
+This skill replaces what the old monolithic init skill used to do in the terminal.
+
+## State machine
+
+Persist progress to `/data/init-progress.json`:
+
+```json
+{
+  "section": "user" | "drive_account_explanation" | "google_oauth" |
+             "notion_oauth" | "drive_folder" | "gtd_interview" |
+             "schedule" | "jobs" | "finalize" | "done",
+  "section_state": { ... per-section scratch ... },
+  "started_at": "<iso>",
+  "config_draft": { ... building toward /data/config.json ... }
+}
+```
+
+On every inbound message, load progress, dispatch to the current section's handler. Each section advances the cursor on success. If the user disconnects mid-flow, next `/gtd-config` resumes where they left off. Reply to every step with one Telegram message; never two messages back-to-back without a user turn between.
+
+## Pre-flight
+
+1. Read `/data/config.json`. If `init_complete: true` → present a numbered menu (Telegram message): «1) reconfigure user 2) reconfigure Google 3) reconfigure Notion 4) reconfigure schedule 5) reconfigure jobs 6) regenerate skill overlay 7) full re-init 0) exit». Branch to the matching section. Otherwise proceed with full flow below.
+2. Read `install_id` from `/data/install_id`.
+3. Confirm the user's Telegram `chat_id` from the inbound `<channel>` tag and save into `config_draft.telegram.chat_id`.
+
+## Section 1 — user
+
+Three messages, one question each, wait for reply between:
+
+1. «Какой язык использовать для всех ответов и сводок? `en` / `ru` / `de`. По умолчанию `en`.» / «What language should I use? en / ru / de.» — save `config.user.locale`.
+2. «Как тебя называть? Имя — этого хватит.» / «What should I call you? First name is enough.» — save `config.user.name`.
+3. «Часовой пояс? Я предполагаю `<auto-detect from /etc/timezone or TZ>`. Подтверди или пришли свой (формат `Europe/Berlin`).» — save `config.user.timezone`.
+
+From this point on, all assistant messages use `config.user.locale`.
+
+## Section 2 — Drive-account-purpose explanation
+
+Before asking about Google accounts, send one message explaining **why** we need to know which Google account is primary:
+
+> Сейчас я попрошу авторизовать один или несколько Google-аккаунтов — я буду читать Gmail и Calendar из каждого. **Один из них** будет «основным»: на его Google Drive я создам папку, в которую буду складывать файлы, которые ты пересылаешь мне в Telegram (фото, PDF, голосовые). Каждая запись в Notion Inbox получит ссылку на сохранённый файл. Обычно основной = личный. Ок?
+
+(English/German equivalents.) Wait for "ok" / acknowledgement.
+
+## Section 3 — Google OAuth (multi-account loop)
+
+Ask: «Перечисли все Gmail-адреса, которые надо опрашивать, через запятую. Первый станет основным (туда складываем вложения).»
+
+For each `email` in the user's list:
+
+1. Reply with «Сейчас открою для тебя ссылку авторизации `<email>`. **Открой её на компьютере, где запущен Docker** (на телефоне не сработает — редирект уходит на `localhost:8000`).»
+2. Call `mcp__google-workspace__list_calendars user_google_email=<email>` — server returns an OAuth URL on first call.
+3. Send the URL as a Telegram message.
+4. Wait for the user to reply «готово» / «done» / equivalent.
+5. Retry `list_calendars`. If success → save `<email>` into `config.google.accounts[]`, advance. If still failing → reply «не получилось — давай попробуем ещё раз» with the URL again.
+
+After the loop: confirm the primary («Основной = `<first email>`. Менять?»). Save `config.google.primary`.
+
+## Section 4 — Notion OAuth
+
+One message:
+
+> Теперь авторизую Notion. Открой эту ссылку **на том же компьютере** и при подключении выбери, **какие страницы и базы данных дать мне доступ**. Я могу видеть только то, что ты явно поделил со мной — всё остальное в твоём workspace остаётся приватным. Если у тебя ещё нет GTD-страниц в Notion — ничего страшного, я создам их за тебя дальше.
+
+Trigger Notion OAuth by calling any Notion MCP tool (e.g. `mcp__notion__notion-search` with empty query). The hosted MCP at `mcp.notion.com/mcp` returns an OAuth URL on first call. Forward the URL to Telegram.
+
+Wait for «готово». Retry the call. On success, advance.
+
+## Section 5 — Drive folder
+
+Auto-create the inbox-attachments folder on the primary account's Drive:
+
+```
+mcp__google-workspace__create_drive_folder
+  user_google_email = <config.google.primary>
+  folder_name = "Notion Inbox Attachments"
+```
+
+Save `folder_id` into `config.google.drive_inbox_folder_id`. Reply «✓ создал папку `Notion Inbox Attachments` на Drive `<primary>` — туда будут попадать пересланные тобой файлы».
+
+## Section 6 — GTD interview (the customization core)
+
+This is the section where the user's existing Notion layout — or absence of one — becomes the assistant's vocabulary.
+
+### 6.1 — does the user already have a GTD setup in Notion?
+
+Ask: «У тебя уже настроена GTD-система в Notion (Inbox, Next Actions, проекты, заметки)? `да` / `нет`».
+
+**If "нет":** offer to create the default layout.
+
+> Я могу создать тебе четыре базы (Inbox, Next Actions, Tasks, Notes) и страницу-архив под одной родительской страницей. Это «дефолтная» схема репозитория — все скиллы из коробки работают с ней. Создать?
+
+If yes:
+- Ask the user for the URL of any Notion page where the GTD parent should live (or just «создать на верхнем уровне workspace»).
+- Call `mcp__notion__notion-create-pages` to create:
+  - Parent page «🗂 GTD»
+  - Inside it: 4 databases (Inbox, Next Actions, Tasks, Notes) with the schemas from the OLD `notion-setup.md` (Inbox: Name/Source/Created/URL; Next Actions: Name/Status/Date/Project/Eisenhower; Tasks: Name/Status/Deadline; Notes: Name/Category/Tags/Source/URL)
+  - One page «📦 Inbox Archive»
+- Save the data_source IDs into `config.notion.{inbox,next_actions,tasks,notes,inbox_archive_page}_id`.
+- Skip 6.2 — user gets the default skill behavior with no overlays needed.
+
+**If "да":** run the interview below.
+
+### 6.2 — interview an existing setup
+
+Ask, one question per Telegram message, waiting for reply:
+
+1. «Скинь URL твоей **Inbox** базы (или эквивалента — куда падает всё непомеченное).»
+2. «Скинь URL **Next Actions** или эквивалента (атомарные действия с датой).»
+3. «У тебя есть отдельная база для **проектов / многошаговых задач** (Tasks)? Если да — URL. Если нет — напиши `нет`.»
+4. «База для **заметок / референсов** (статьи, контакты, идеи)? URL или `нет`.»
+5. «Куда ты архивируешь обработанные Inbox-записи? URL страницы-архива, или `удаляю` / `меняю статус` / `нет`.»
+
+For each provided URL: call `mcp__notion__notion-fetch` to validate access. If 403/404, reply «не вижу — поделись страницей с интеграцией (Share → Connections → cgtd) и пришли URL ещё раз». Save IDs into `config.notion.*_id`.
+
+Then probe the schemas. For each provided database, call `mcp__notion__notion-fetch` and inspect the property list:
+
+6. For the Inbox/Next Actions/Tasks DBs that exist:
+   - Find the **Status** property (any property of type `status` or `select`). Send: «В `<DB>` твой статус-проперти называется `<name>` со значениями: `<list>`. Какое значение означает «не сделано / новое»? «в работе»? «сделано»? «отменено»? «отложено / someday»? Можно пропустить, если значения не подходят.»
+   - Save into `config.gtd.<db>.status_field` + `status_values.{open,in_progress,done,cancelled,deferred}`.
+   - Find the **Date** / **Deadline** property if present. Send: «Поле даты — `<name>`? Используется для дедлайна или для расписания?» Save.
+   - Find any **priority** property (Eisenhower, P1-P4, etc.). Send: «Есть приоритеты? Поле `<name>` со значениями `<list>` — это что? Эйзенхауэр / P1-P4 / другое / не используется.» Save into `config.gtd.priority_scheme`.
+
+7. Notes DB (if present): «Какие у тебя поля в Notes — категория, тэги, источник? Перечисли.» Save into `config.gtd.notes.fields`.
+
+8. Free-form: «Расскажи коротко своими словами, как ты пользуешься этой системой день в день. Что ты делаешь утром? Что вечером? Как обрабатываешь Inbox? Что особенного я должен учитывать?» — save the answer verbatim into `config.gtd.user_narrative`. The morning-ritual / evening-review / process-inbox skills will read this when generating their output to align with the user's voice.
+
+### 6.3 — generate skill overlay
+
+Based on `config.gtd.*`, write customized SKILL.md files into `/data/skills-overlay/<name>/SKILL.md` for any skill whose default behavior needs adapting:
+
+- **process-inbox** — replace hardcoded Status values («Not started» / «Done» / «Cancelled» / «Someday/Maybe») with `config.gtd.next_actions.status_values.*`. Replace data-source IDs with `config.notion.*_id`. If user has no Tasks DB, drop the «multi-step → Tasks» branch and merge into Next Actions. If user has no Notes DB, drop the Notes branch and inline references into Inbox body.
+- **morning-ritual** — replace status filter («Status ∉ {Done, Cancelled}») with the user's terms. Replace Eisenhower references with `config.gtd.priority_scheme` (drop entirely if `none`).
+- **evening-review** — same status replacements.
+- **proactive-inbox** — replace status terms; if user has no Notes DB, route newsletters/references to Inbox body instead.
+- **inbox-router** — replace `notion.inbox_id` reference (already config-driven, so usually no overlay needed unless user opted out of Inbox-everything).
+
+Method: read each shipped `/app/skills/<name>/SKILL.md`, run substitution on the named hardcoded strings, write the result to `/data/skills-overlay/<name>/SKILL.md`. Substitutions are recorded in `config.gtd.overlay_substitutions[]` so a future `/cgtd-reset-skills` knows what was changed.
+
+If `config.gtd.user_narrative` is non-empty, append a `## User narrative` section to each generated overlay so every skill run picks up the user's day-in-the-life context.
+
+After writing overlays, the entrypoint's per-skill symlinking (already in `entrypoint.sh`) will pick them up on next session start. The current Telegram channel session must be restarted for skills to reload — tell the user at the end.
+
+## Section 7 — schedule
+
+Ask: «Расписание — когда я тебе пингую? Выбери пресет: `1)` flex (только утренний и вечерний пинг, без жёстких часов) `2)` 9-to-5 офис `3)` сменный график `4)` свой».
+
+For each preset, fill `config.schedule.weekday_blocks` and `config.schedule.weekend_rule`. Custom = ask block by block.
+
+## Section 8 — jobs
+
+For each of the four jobs, send a separate Telegram message:
+
+> `proactive-inbox` — каждые 2 часа днём, сканит Gmail+Calendar, кладёт в Notion. Включить? Расписание `13 8-20/2 * * *` подходит?
+
+User answers yes/no + optional cron override per job. **Do not** offer an "all enabled" Enter-default — every job is an explicit answer.
+
+Save into `config.jobs.<name>.{enabled,cron}`.
+
+## Section 9 — finalize
+
+1. Write `/data/config.json` atomically: merge `config_draft` with `init_complete: true`, `init_completed_at: <iso>`. Use `tmp` then `mv`.
+2. Delete `/data/init-progress.json`.
+3. For each enabled job, call `CronCreate`:
+   - `name` = `cgtd-${install_id}-${job}`
+   - `cron` = `config.jobs.<job>.cron`
+   - `prompt` = `Invoke skill ${job}. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`
+4. Run a **dry-run** of each enabled skill (skill respects a `--dry-run` flag and prints what it would do). Report results.
+5. Send final Telegram message:
+
+> ✓ Готово. Я живой.
+>
+> Что дальше:
+> - Кидай мне в чат любые мысли, фото, файлы — они падают в Notion Inbox.
+> - Утренний бриф в `<morning_ritual.cron>`, вечерний обзор в `<evening_review.cron>`.
+> - Команды: `/morning`, `/evening`, `/inbox`, `/status`, `/gtd-config` (этот разговор), `/cgtd-reauth google <email>` или `/cgtd-reauth notion`.
+>
+> Чтобы скиллы перезагрузились с твоей кастомизацией, перезапусти channel session:
+> ```
+> docker compose restart assistant
+> docker compose exec -d assistant /app/bin/start-channel.sh
+> ```
+
+## Failure modes
+
+- User abandons mid-flow → progress is on disk, `/gtd-config` resumes.
+- OAuth link unreachable (port-forward issue on VPS) → reply with the SSH local-forward command from `docs/deploy-digitalocean.md`.
+- Notion fetch returns 404 → tell user to share the page with the integration; pause until retry.
+- Schema probing finds no recognizable Status field → reply «не нашёл status — какое поле используешь?», fall back to user-provided answer.
+- User's existing setup is too divergent to map cleanly → save `config.gtd.unmappable_warning: true` and the verbatim user answer; skills run in degraded mode (skip Status filtering, surface everything) and the user is told.

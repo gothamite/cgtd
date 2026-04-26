@@ -1,24 +1,29 @@
 # Notion setup
 
-The assistant needs four databases (**Inbox, Next Actions, Tasks, Notes**) and one page (**📦 Inbox Archive**). 10 minutes to create from scratch, or 30 seconds if you already have a GTD setup.
+The assistant uses Notion for its entire GTD system. There is **no token to paste** — Notion auth happens via OAuth during the Telegram-driven interview (`/gtd-config`). You don't need to do anything in Notion before starting; the interview can even create the GTD databases for you.
 
-## Step 1 — create an integration
+This doc covers what the system needs, how access restriction works, and what the default schema looks like if you let the assistant create one.
 
-1. https://www.notion.so/my-integrations → **New internal integration**.
-2. Name: `cgtd`. Workspace: yours.
-3. Capabilities: Read, Insert, Update content. (Comment is optional.)
-4. Copy the **Internal Integration Token**. Paste into `.env`:
-   ```
-   NOTION_TOKEN=secret_...
-   ```
+## Two paths
 
-## Step 2 — create the databases
+When the Telegram interview reaches the Notion section, the bot asks: «do you already have a GTD setup in Notion?»
 
-If you already have a GTD setup in Notion, skip this and just record the URLs.
+- **No** → the bot creates a parent page «🗂 GTD» (under a location you choose) with four databases (Inbox, Next Actions, Tasks, Notes) and a child page «📦 Inbox Archive». You're done — every shipped skill works out of the box. Schemas listed below.
+- **Yes** → the bot asks for the URLs of your existing databases, probes their property layouts, and asks you about Status values, priority scheme, and how you use the system. It then rewrites its skills (in `/data/skills-overlay/`) to use your vocabulary.
 
-Otherwise, create a parent page (e.g. "GTD") and inside it create four full-page databases. Suggested schemas — adapt as you like:
+In both paths, the user's manual job in Notion is the same single step: **share the GTD parent page with the cgtd integration during the Notion OAuth consent screen.**
 
-### Inbox
+## How the OAuth consent screen works
+
+When the Telegram interview opens the Notion authorization link, you'll see Notion's standard consent screen with a list of pages. **Pick the single parent page that holds (or will hold) all your GTD databases.** Sharing is inherited — every database and child page under that parent is automatically accessible.
+
+What this means for privacy: anything in your Notion workspace that you didn't explicitly share is **invisible** to the assistant. Notion enforces this server-side. Even if the assistant somehow guessed a page ID, the API returns 403. You can revoke access at any time from Notion's "Connections" panel.
+
+If you want the strictest possible scope: create one page (e.g. "GTD") and share only that page during OAuth. All four GTD databases live under it. The rest of your workspace is invisible.
+
+## Default schema (what the bot creates if you say "no")
+
+### Inbox database
 | Property | Type |
 |----------|------|
 | Name | Title |
@@ -26,7 +31,7 @@ Otherwise, create a parent page (e.g. "GTD") and inside it create four full-page
 | Created | Created time |
 | URL | URL (optional, for attachments) |
 
-### Next Actions
+### Next Actions database
 | Property | Type |
 |----------|------|
 | Name | Title |
@@ -35,14 +40,14 @@ Otherwise, create a parent page (e.g. "GTD") and inside it create four full-page
 | Project | Relation → Tasks |
 | Eisenhower | Select (Q1/Q2/Q3/Q4) |
 
-### Tasks (multi-step projects)
+### Tasks database (multi-step projects)
 | Property | Type |
 |----------|------|
 | Name | Title |
 | Status | Status |
 | Deadline | Date |
 
-### Notes
+### Notes database
 | Property | Type |
 |----------|------|
 | Name | Title |
@@ -52,27 +57,37 @@ Otherwise, create a parent page (e.g. "GTD") and inside it create four full-page
 | URL | URL |
 
 ### 📦 Inbox Archive
-A regular page (not a database). Inbox items get moved here as children after processing.
+A regular page (not a database). Inbox items get moved here as children after the nightly `process-inbox` job classifies them.
 
-## Step 3 — share with the integration
+## Customizing your existing schema
 
-Open each database (and the Archive page). Top-right "Share" → "Connections" → add the integration you created. **Do this for all four databases AND the archive page** — without sharing, the integration can't read or write.
+If you already have a GTD setup, the interview asks about each database in turn:
 
-## Step 4 — collect URLs
+- "Where's your Inbox?" — paste the URL.
+- "Where's Next Actions?" — paste.
+- "Do you have a Tasks/projects DB? Notes DB? Archive page?" — yes/no + URL.
+- "What's your Status property called and what values does it have?" — the bot lists the values it sees and asks you which means «open / in progress / done / cancelled / deferred».
+- "Do you use a priority scheme — Eisenhower, P1-P4, MoSCoW, none?" — your answer drives how `morning-ritual` prioritizes Someday/Maybe items.
+- "Tell me how you use this system day-to-day, in your own words" — the bot saves this verbatim and feeds it into every skill so morning briefs and evening reviews speak in your terms.
 
-Open each database and copy its URL. Format:
+Your answers become customized skill files in `/data/skills-overlay/`. The shipped templates in `/app/skills/` are never modified, so `git pull` + `docker compose build` always brings the latest templates while preserving your overlay.
+
+## Re-running the Notion interview
+
+If you change your Notion setup later (rename a Status value, add a new DB, etc.), DM your bot:
+
 ```
-https://www.notion.so/<workspace>/<title-slug>-<32-char-hex>?v=...
+/gtd-config
 ```
 
-The 32-char hex at the **end** of the path (immediately before `?v=`) is the data_source ID. The slug before it is decorative and varies. Just paste the whole URL — the init skill extracts the ID for you.
+Pick "reconfigure Notion" or "regenerate skill overlay" from the menu.
 
-For the archive **page**, copy its page URL the same way.
+## Re-authorizing Notion
 
-## Step 5 — run /init-cgtd
+If Notion's OAuth token gets revoked or expires:
 
-Inside the container, `/init-cgtd` asks for each URL one at a time and validates by fetching the database. If validation fails (404 / forbidden), you forgot to share with the integration — go back to Step 3.
+```
+/cgtd-reauth notion
+```
 
-## Customizing the schema
-
-The skills reference specific Status values ("Not started", "Done", "Cancelled", "Someday/Maybe"). If you use different names, edit the relevant SKILL.md files in `skills/` to match. Eisenhower (Q1–Q4) is referenced in `morning-ritual` for prioritizing Someday/Maybe; if you don't use Eisenhower, the skill falls back to title-only prioritization (less precise, still works).
+The bot sends a new OAuth link; you re-share pages and pick up where you left off.
