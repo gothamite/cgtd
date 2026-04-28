@@ -71,6 +71,8 @@ docker compose exec -it assistant claude --channels plugin:telegram@claude-plugi
 
 **Keep this terminal open.** It holds your live channel session — every Telegram message to the bot will appear here as a `<channel source="telegram" ...>` tag, and Claude will process it. Close the terminal and the bot stops responding (and crons can't fire).
 
+> **GUI alternative (Docker Desktop):** Containers → click `cgtd` → **Exec** tab → in the shell that opens, run `claude --channels plugin:telegram@claude-plugins-official`. Same effect as the CLI command above; the session lives as long as Docker Desktop is running and that Exec tab is open.
+
 > For 24/7 operation: run on a VPS, or keep the laptop on with sleep disabled. macOS users: System Settings → Energy → "Prevent automatic sleeping when display is off" lets the channel keep running with the lid closed. (Future versions of cgtd may include `tmux`-based detach/reattach, but for now the channel session is tied to its terminal.)
 
 ## 4. Phase 2 — Telegram chat  `[telegram]`
