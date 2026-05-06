@@ -11,7 +11,7 @@ Triggered when a Telegram message arrives via the channel plugin (`<channel sour
 
 Read `/data/config.json`. **If the file is missing OR `init_complete` is `false` OR not set:**
 
-- If the message is `/gtd-config` (case-insensitive) → invoke `gtd-interview` skill.
+- If the message is `/gtd-config` or `/cgtd` (case-insensitive) → invoke `gtd-interview` skill.
 - For **any other message** during pre-init: reply «Ещё не настроен. Напиши `/gtd-config` чтобы начать настройку.» / «Not configured yet. Send `/gtd-config` to start setup.» (locale guess: from message language, default English.) Do NOT route to Notion — there's no Inbox DB ID yet.
 - Exit.
 
@@ -21,7 +21,7 @@ Only proceed past this guard if `init_complete: true`.
 
 Match the start of the message text:
 
-- `/gtd-config` → invoke `gtd-interview` (reconfigure menu)
+- `/gtd-config` or `/cgtd` → invoke `gtd-interview` (reconfigure menu)
 - `/cgtd-reauth google <email>` or `/cgtd-reauth notion` → invoke `cgtd-reauth` skill
 - `/morning` / `/утро` → invoke `morning-ritual` immediately
 - `/evening` / `/вечер` → invoke `evening-review` immediately
@@ -30,20 +30,40 @@ Match the start of the message text:
 
 If the message doesn't start with `/`, route to Inbox per the logic below.
 
+If the message starts with `/` but matches none of the commands above, reply with a help text:
+
+> Неизвестная команда. Доступные команды:
+> `/gtd-config` или `/cgtd` — настройка
+> `/cgtd-reauth google <email>` — переавторизация Google
+> `/cgtd-reauth notion` — переавторизация Notion
+> `/morning` / `/утро` — утренний брифинг
+> `/evening` / `/вечер` — вечерний обзор
+> `/inbox` / `/разбери` — обработка Inbox
+> `/status` — статус cron-задач
+>
+> Обычное сообщение (без `/`) → попадает в Notion Inbox.
+
+Do NOT route unknown commands to Inbox.
+
 ## Routing logic (post-init, non-command messages)
 
 1. Read `/data/config.json` for `notion.inbox_id`, `telegram.chat_id`, `user.locale`, `google.{primary,drive_inbox_folder_id}`.
 2. Verify the message came from `config.telegram.chat_id` (channel plugin's allowlist already filters; this is belt-and-suspenders).
 3. **Attachments**: if the message has an `image_path` or `attachment_file_id`:
-   - Download via `mcp__plugin_telegram_telegram__download_attachment`.
-   - Upload to the primary Drive folder via `mcp__google-workspace__create_drive_file user_google_email=<config.google.primary> folder_id=<config.google.drive_inbox_folder_id>`.
-   - Get the shareable link.
+   - **For `image_path`**: the file path is given directly in the channel tag attribute.
+     1. Run `mkdir -p /root/.workspace-mcp/attachments` via Bash.
+     2. Copy the file: `cp <image_path> /root/.workspace-mcp/attachments/<basename>` via Bash (extract basename from the path).
+     3. Upload via `mcp__google-workspace__create_drive_file user_google_email=<config.google.primary> folder_id=<config.google.drive_inbox_folder_id> fileUrl=file:///root/.workspace-mcp/attachments/<basename>`.
+     4. Delete the copy: `rm /root/.workspace-mcp/attachments/<basename>` via Bash.
+   - **For `attachment_file_id`**: call `mcp__plugin_telegram_telegram__download_attachment` to get the local path, then apply the same mkdir+copy+upload+delete pattern using that path.
+   - Get the shareable link via `mcp__google-workspace__get_drive_shareable_link` after upload.
+   - Do NOT add a Drive-upload-failed fallback here — the existing `## Failure modes` section already handles it.
 4. **Apply rule files** from `/data/memory/`:
    - `feedback_implicit_dates.md` — parse «до конца зимы», "by next Friday", etc.
    - `feedback_contextual_deadlines.md` — infer deadlines from context.
    - `feedback_default_inbox.md` — when in doubt, drop without asking.
 5. Create a Notion row in `config.notion.inbox_id` via `mcp__notion__notion-create-pages`. Title = first 80 chars; body = full text + Drive link if any.
-6. React with `📥` via `mcp__plugin_telegram_telegram__react`. No reply text.
+6. React with `👍` via `mcp__plugin_telegram_telegram__react`. No reply text.
 
 ## Replies to pending reviews
 
