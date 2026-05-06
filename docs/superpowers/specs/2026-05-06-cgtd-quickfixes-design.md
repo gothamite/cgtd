@@ -55,16 +55,40 @@ Add a new section **"Если `/cgtd-reauth notion` не помогает"** aft
 
 ### skills/gtd-interview/SKILL.md
 
-In section 6.2 (interview an existing setup), **replace existing question 3** with two more precise questions:
+In section 6.2 (interview an existing setup), **replace existing question 3** with three separate questions:
 
-- **Question 3a — Projects vs Tasks:** «У тебя есть база для **многошаговых целей / проектов** (например "Построить дом", "Запустить продукт") — отдельная от атомарных Next Actions? Если да — URL; если нет — напиши `нет`.» Save DB ID into `config.notion.tasks_id`. Set `config.gtd.has_projects_db: true` if a URL was provided, `false` if "нет".
-- **Question 3b — Calendar integration:** «Как ты используешь Календарь рядом с Next Actions — планируешь NA в Календаре или ведёшь их отдельно?» Options: `в календаре` / `отдельно` / `не использую`. Save into `config.gtd.calendar_integration: "calendar" | "separate" | "none"`.
+- **Question 3a — Projects DB:** «У тебя есть отдельная база для **Проектов** — многошаговых целей верхнего уровня (например "Построить дом", "Запустить продукт")? Если да — URL; если нет — `нет`.» Save ID into `config.notion.projects_id`. Set `config.gtd.has_projects_db: true/false`.
+- **Question 3b — Tasks DB:** «У тебя есть отдельная база для **Задач** — конкретных шагов внутри проектов (например "Залить фундамент", "Подключить отопление")? Если да — URL; если нет — `нет`.» Save ID into `config.notion.tasks_id`. Set `config.gtd.has_tasks_db: true/false`. *(Note: a user may have Projects but no Tasks DB, Tasks but no Projects DB, both, or neither — all four combinations are valid.)*
+- **Question 3c — Calendar integration:** «Как ты ведёшь расписание рядом с Next Actions? Выбери: `1)` Calendar и Next Actions — одна база (NA сразу идут в Календарь) `2)` раздельно — NA в Notion, встречи в Google Calendar `3)` не использую Calendar для планирования.» Save into `config.gtd.calendar_integration: "unified" | "separate" | "none"`.
 
-Remaining questions 4–8 are renumbered to 5–9 accordingly.
+Remaining questions 4–8 are renumbered to 6–10 accordingly.
 
-**In section 6.3 (generate skill overlay):** Replace the existing check «If user has no Tasks DB, drop the `multi-step → Tasks` branch» with `config.gtd.has_projects_db`. `config.gtd.has_projects_db: false` is the authoritative signal that the user has no projects/tasks DB (not the presence/absence of `config.notion.tasks_id`, which may be set to null even when the user said yes but failed URL validation). If `has_projects_db` is true but `tasks_id` is null (URL validation failed), the overlay should note the gap and surface it to the user rather than silently dropping the branch.
+**Config keys added:**
+- `config.notion.projects_id` — Notion DB ID for Projects (null if none)
+- `config.notion.tasks_id` — Notion DB ID for Tasks/steps (null if none)
+- `config.gtd.has_projects_db` — boolean
+- `config.gtd.has_tasks_db` — boolean
+- `config.gtd.calendar_integration` — `"unified" | "separate" | "none"`
 
-Use `config.gtd.calendar_integration` in morning-ritual overlay to optionally reference Calendar vs. standalone Next Actions scheduling language.
+**In section 6.3 (generate skill overlay):** The overlay generator must account for all four Projects×Tasks combinations:
+
+| has_projects_db | has_tasks_db | Overlay behavior |
+|---|---|---|
+| false | false | All multi-step work goes into Next Actions. Drop "move to Projects/Tasks" branches. |
+| true | false | Multi-step goals → Projects DB. Steps are tracked as NA directly, not in a Tasks DB. |
+| false | true | Tasks DB used for individual action steps. No Projects level. Route actionable items to Tasks or NA based on granularity. |
+| true | true | Full hierarchy: Goals → Projects DB, Steps → Tasks DB, Atomic actions → Next Actions. |
+
+For each existing skill that writes to Notion (proactive-inbox, morning-ritual, evening-review, process-inbox, inbox-router), the overlay must:
+- Reference `config.notion.projects_id` and `config.notion.tasks_id` instead of hardcoded IDs only when the respective DB exists.
+- Never silently drop a routing branch — if the target DB is absent, fall back to Next Actions and note in the Notion entry body that a more specific DB isn't configured.
+
+**Calendar integration in skill overlays:**
+- `"unified"`: morning-ritual should not create NA entries for items already in Google Calendar (they're the same system). Dedup by event_id. proactive-inbox: when creating NA for a deadline, note that it should also be added to Calendar.
+- `"separate"`: morning-ritual shows Calendar and NA as two parallel sections. proactive-inbox creates NA entries independently of Calendar.
+- `"none"`: Calendar section omitted from morning-ritual and evening-review.
+
+If a config flag is `true` but the corresponding `_id` is null (URL validation failed during interview), the overlay should emit a warning in Telegram on first run: «Настроена база [Projects/Tasks] но ID не найден — проверь `/gtd-config`.» rather than silently routing to a fallback.
 
 ### skills/init/SKILL.md
 
