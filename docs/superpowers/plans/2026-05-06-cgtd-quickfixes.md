@@ -197,7 +197,7 @@ with:
      4. Delete the copy: `rm /root/.workspace-mcp/attachments/<basename>` via Bash.
    - **For `attachment_file_id`**: call `mcp__plugin_telegram_telegram__download_attachment` to get the local path, then apply the same mkdir+copy+upload+delete pattern using that path.
    - Get the shareable link via `mcp__google-workspace__get_drive_shareable_link` after upload.
-   - If Drive upload fails for any reason: still create the Inbox entry, include `(вложение не удалось загрузить)` in the body.
+   - Do NOT add a Drive-upload-failed fallback here — the existing `## Failure modes` section already handles it.
 ```
 
 - [ ] **Verify**
@@ -418,7 +418,7 @@ with:
 5. «Как ты ведёшь расписание рядом с Next Actions? `1)` Calendar и NA — одна система (NA сразу попадают в Календарь) `2)` раздельно — NA в Notion, встречи в Google Calendar `3)` не использую Календарь для планирования.» Save `config.gtd.calendar_integration: "unified" | "separate" | "none"`.
 ```
 
-Renumber the remaining original questions (4 → 6, 5 → 7, 6 → 8, 7 → 9, 8 → 10).
+Renumber all remaining numbered items in section 6.2 after the replaced question 3: old 4 → new 6, old 5 → new 7, old 6 → new 8, old 7 → new 9, old 8 → new 10. This includes the schema-probe sub-step (currently item 6) — renumber its heading to 8 but do not restructure its content.
 
 - [ ] **Verify**
 
@@ -446,12 +446,12 @@ grep -n "6.3\|generate skill overlay\|If user has no Tasks" skills/gtd-interview
 
 - [ ] **Apply the edit**
 
-In section 6.3, find the existing check:
+In section 6.3, find the existing process-inbox bullet. The full sentence to replace is:
 ```
-- **process-inbox** — replace hardcoded Status values … If user has no Tasks DB, drop the «multi-step → Tasks» branch and merge into Next Actions. If user has no Notes DB, drop the Notes branch and inline references into Inbox body.
+If user has no Tasks DB, drop the «multi-step → Tasks» branch and merge into Next Actions. If user has no Notes DB, drop the Notes branch and inline references into Inbox body.
 ```
 
-Replace the «If user has no Tasks DB» clause with:
+Replace **only the Tasks DB clause** (the first sentence), preserving the Notes DB clause unchanged. The new text for the Tasks DB part:
 
 ```
 - **process-inbox** — replace hardcoded Status values with `config.gtd.next_actions.status_values.*`. Replace data-source IDs with `config.notion.*_id`. Routing logic adapts to the user's DB structure:
@@ -466,6 +466,8 @@ Replace the «If user has no Tasks DB» clause with:
   If a flag is `true` but the corresponding `_id` is null (URL validation failed during interview), emit a Telegram warning on first run: «Настроена база [Projects/Tasks] но ID не найден — проверь `/gtd-config`.»
 
   For calendar: if `calendar_integration: "unified"`, dedup Next Actions against Calendar events by event_id before creating. If `"separate"`, create independently. If `"none"`, omit Calendar references.
+
+  After inserting the new routing table, re-append the preserved Notes DB clause: «If user has no Notes DB, drop the Notes branch and inline references into Inbox body.»
 ```
 
 Also in section 6.3, find the morning-ritual and evening-review overlay instructions and add:
@@ -857,10 +859,10 @@ After the line describing what `/init-cgtd` does («This walks you through three
 - [ ] **Verify**
 
 ```bash
-grep -n "MCP connectivity\|docker compose restart" README.md
+grep -n "MCP connectivity" README.md
 ```
 
-Expected: 1 match.
+Expected: 1 match (the new string; `docker compose restart` already exists elsewhere in the file — don't use it as a verification anchor).
 
 - [ ] **Commit**
 
