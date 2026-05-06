@@ -11,7 +11,7 @@ Scope: Quick wins (items 1–14 + item 19 from report table). Large features (ti
 Three logical commits, each independently reviewable and revertable:
 
 1. `fix: skill patches` — all SKILL.md changes
-2. `fix: infra` — docker-compose + settings.json (both template and live)
+2. `fix: infra` — docker-compose files + settings.json (both template and live)
 3. `docs: setup improvements` — google-setup.md + README.md
 
 ---
@@ -22,50 +22,65 @@ Three logical commits, each independently reviewable and revertable:
 
 | Change | Detail |
 |--------|--------|
-| Reaction emoji | Replace `📥` → `👍` in the "React" step (Telegram Bot API doesn't allow `📥`) |
-| `/cgtd` alias | Treat `/cgtd` as equivalent to `/gtd-config` in the command dispatch table |
+| Reaction emoji | Replace `📥` → `👍` in the "React" step (Telegram Bot API doesn't support `📥`) |
+| `/cgtd` alias — pre-init guard | In the pre-init guard block, add `/cgtd` as an equivalent trigger for `/gtd-config` (so typing `/cgtd` before init routes to `gtd-interview`, not the "not configured" message) |
+| `/cgtd` alias — post-init | In the post-init command dispatch table, add `/cgtd` as an alias for `/gtd-config` |
 | Unknown command handler | If message starts with `/` and matches no known command, reply with a help text listing all available commands rather than silently routing to Inbox |
-| Attachment copy-before-upload | Before calling `create_drive_file`, copy the file from `/root/.claude/channels/telegram/inbox/<filename>` to `/root/.workspace-mcp/attachments/<filename>` via Bash, then upload from the new path, then delete the copy |
+| Attachment copy-before-upload — `image_path` | When the `<channel>` tag has `image_path`: (1) `mkdir -p /root/.workspace-mcp/attachments`; (2) copy the file from `image_path` to `/root/.workspace-mcp/attachments/<basename>` (extract basename from `image_path`, do not hardcode path prefix); (3) call `create_drive_file` with the destination path; (4) delete the copy after upload. |
+| Attachment copy-before-upload — `attachment_file_id` | Call `download_attachment` to get the local file path, then always apply the same mkdir+copy pattern: copy to `/root/.workspace-mcp/attachments/<basename>`, upload from there, delete the copy. This is simpler than runtime detection of allowed dirs and is always safe. |
 
-**Why copy-before-upload:** `workspace-mcp` restricts readable paths to `ALLOWED_FILE_DIRS`. Even after adding the env var (commit 2), this belt-and-suspenders copy ensures the skill works on existing containers that haven't been restarted yet.
+**Note on Notion tool prefix:** Throughout all SKILL.md files, the correct tool prefix for Notion is `mcp__notion__` (matching the `"notion"` server key in `settings.json`). Do NOT use `mcp__plugin_Notion_notion__`, which appears in the Claude Code runtime's deferred tool list for a cloud-plugin variant.
 
 ### skills/proactive-inbox/SKILL.md
 
 | Change | Detail |
 |--------|--------|
-| Notion date format | Document explicitly: use `"date:Date:start": "YYYY-MM-DD"` (not `"Date": "YYYY-MM-DD"`) for all Notion create-pages calls. Add example in the "Sources" → "routing" section. |
-| Metadata-first Gmail strategy | Fetch all messages with `format: "metadata"` first (Subject/From/Date only). Then fetch `format: "full"` only for messages classified as potentially actionable. Batch size: 10, not 20. |
-| Degraded status on partial auth failure | If one Google account returns `invalid_grant` but at least one other account succeeds, mark cron run as `degraded` (not `fail`). Still ping Telegram about the failing account. |
-| Unified auth-fail handler | Any `invalid_grant` from any account → immediate Telegram ping «Auth истёк для `<account>`. Запусти `/cgtd-reauth <service> <id>`» → log + exit cleanly. Consistent across all failure paths. |
+| Notion date format | Document explicitly: use `"date:Date:start": "YYYY-MM-DD"` (not `"Date": "YYYY-MM-DD"`) for all `notion-create-pages` calls. Add example in the section that describes creating Notion entries. |
+| Metadata-first Gmail strategy | Two-step fetch: (1) Call `search_gmail_messages` to get a list of message IDs, subjects, senders, and dates (this tool returns header-level data; no special format parameter needed). (2) Call `get_gmail_message_content` (or `get_gmail_messages_content_batch`) only for messages classified as potentially actionable in step 1. Batch size for step 2: max 10 messages per call. |
+| Auth-fail behavior — replace existing rule | **Delete** the existing Failure modes rule «google-workspace returns `invalid_grant` for an account → log `fail` ... exit». **Replace** with: iterate over all accounts in `config.google.accounts[]`; if an account returns `invalid_grant`, ping Telegram «Google auth для `<email>` истёк. Запусти `/cgtd-reauth google <email>`», skip that account, and continue with the remaining accounts. After all accounts are processed: if at least one account succeeded, log cron run as `degraded`; if all accounts failed, log `fail`. |
+| Notion auth-fail behavior | If Notion MCP returns an auth error, ping Telegram «Notion auth истёк. Запусти `/cgtd-reauth notion`», skip all Notion writes, continue with Gmail/Calendar processing, log the run as `degraded`. |
 
 ### skills/cgtd-reauth/SKILL.md
 
-Add a new section **"Если `/cgtd-reauth notion` не помогает"** after the existing Notion procedure:
+Add a new section **"Если `/cgtd-reauth notion` не помогает"** after the existing Notion procedure. This section is **terminal/host-shell guidance** — make that explicit with a header or note:
 
-> If `notion-search` still returns an auth error after the OAuth flow, the Notion MCP session may be stuck. Full reset:
+> **Если после OAuth Notion всё ещё не работает (только с хостовой оболочки):**
+>
+> Notion MCP-сессия может зависнуть. Полный сброс:
 > ```bash
 > docker compose restart assistant
 > docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
 > ```
-> Then retry `/cgtd-reauth notion` from Telegram.
+> Затем снова отправь `/cgtd-reauth notion` из Telegram.
 
 ### skills/gtd-interview/SKILL.md
 
-In section 6.2 (interview an existing setup), add two questions after the existing database URL questions:
+In section 6.2 (interview an existing setup), **replace existing question 3** with two more precise questions:
 
-- **Question on Projects:** «У тебя есть отдельная база для многошаговых целей / проектов (Projects) — отдельно от атомарных Next Actions? Если да — URL, если нет — напиши `нет`.»
-- **Question on Calendar integration:** «Как Календарь соотносится с Next Actions — ты планируешь NA в Календаре или ведёшь их отдельно?»
+- **Question 3a — Projects vs Tasks:** «У тебя есть база для **многошаговых целей / проектов** (например "Построить дом", "Запустить продукт") — отдельная от атомарных Next Actions? Если да — URL; если нет — напиши `нет`.» Save DB ID into `config.notion.tasks_id`. Set `config.gtd.has_projects_db: true` if a URL was provided, `false` if "нет".
+- **Question 3b — Calendar integration:** «Как ты используешь Календарь рядом с Next Actions — планируешь NA в Календаре или ведёшь их отдельно?» Options: `в календаре` / `отдельно` / `не использую`. Save into `config.gtd.calendar_integration: "calendar" | "separate" | "none"`.
 
-Save answers into `config.gtd.has_projects_db` (bool) and `config.gtd.calendar_integration` (string: `"calendar"` / `"separate"` / `"none"`). Reference in skill overlays where relevant.
+Remaining questions 4–8 are renumbered to 5–9 accordingly.
+
+**In section 6.3 (generate skill overlay):** Replace the existing check «If user has no Tasks DB, drop the `multi-step → Tasks` branch» with `config.gtd.has_projects_db`. `config.gtd.has_projects_db: false` is the authoritative signal that the user has no projects/tasks DB (not the presence/absence of `config.notion.tasks_id`, which may be set to null even when the user said yes but failed URL validation). If `has_projects_db` is true but `tasks_id` is null (URL validation failed), the overlay should note the gap and surface it to the user rather than silently dropping the branch.
+
+Use `config.gtd.calendar_integration` in morning-ritual overlay to optionally reference Calendar vs. standalone Next Actions scheduling language.
 
 ### skills/init/SKILL.md
 
-Add a **Pre-flight MCP check** step before handing off to `gtd-interview`. After Phase 1 bootstrap and before printing the "open Telegram" message, verify:
+Add a **Pre-flight MCP check** step at the end of Phase 1 (terminal session), immediately before the "✓ Bootstrap done" message.
 
-1. Call `mcp__google-workspace__list_calendars` with any email → if fails with connection error (not auth error), warn: «google-workspace MCP недоступен. Проверь `settings.json` и перезапусти контейнер.»
-2. Call `mcp__notion__notion-search` with empty query → if fails with connection error, warn: «Notion MCP недоступен. Проверь подключение в `settings.json`.»
+**Google check:** Call `mcp__google-workspace__list_calendars` with any placeholder email. Two expected outcomes:
+- Returns an OAuth URL → expected, everything is working, do not warn.
+- Returns a tool execution error (MCP connection failed, command not found, non-200 from the server) → print: «⚠ google-workspace MCP is not responding. Check `data/claude-home/settings.json` and run `docker compose restart`.»
 
-Auth errors (OAuth URL returned) are expected at this stage — don't flag them. Only flag hard connection failures.
+**Notion check:** Call `mcp__notion__notion-search` with an empty query. Two expected outcomes:
+- Returns an OAuth URL (or a valid response) → expected, do not warn.
+- Returns a tool execution error (network failure, MCP server unreachable, non-200 status that is not a redirect) → print: «⚠ Notion MCP is not responding. Check `data/claude-home/settings.json`.»
+
+The distinction: an OAuth URL in the response body means the server is reachable and responding correctly; a tool-layer exception or error code means the server is misconfigured or unreachable. Do not warn on auth-not-yet-set — that is the normal state at Phase 1 end.
+
+This check is terminal-only. It is not repeated during the Telegram interview.
 
 ---
 
@@ -79,17 +94,25 @@ Add to `environment` for **both** services (`assistant` and `assistant_user2`):
 - ALLOWED_FILE_DIRS=/root/.claude/channels/telegram/inbox:/root/.workspace-mcp/attachments
 ```
 
+### docker-compose.example.yml
+
+Add to `environment` for **both** services (`work` and `personal`):
+
+```yaml
+- ALLOWED_FILE_DIRS=/root/.claude/channels/telegram/inbox:/root/.workspace-mcp/attachments
+```
+
 ### .claude/settings.json.example
 
-Add a `permissions` section alongside the existing `mcpServers`:
+Add a `permissions` section using the same wildcard syntax as the live file (`Bash*`, no parentheses):
 
 ```json
 {
   "permissions": {
     "allow": [
-      "Bash(*)",
-      "Read(*)",
-      "Write(*)",
+      "Bash*",
+      "Read*",
+      "Write*",
       "mcp__google-workspace__*",
       "mcp__notion__*",
       "mcp__plugin_telegram_telegram__*"
@@ -101,7 +124,20 @@ Add a `permissions` section alongside the existing `mcpServers`:
 
 ### data/claude-home/settings.json (live install)
 
-Same `permissions` block added to the existing file (which already has a populated `mcpServers` section).
+Extend the existing `permissions.allow` array (currently only `"Bash*"`) with:
+
+```json
+"allow": [
+  "Bash*",
+  "Read*",
+  "Write*",
+  "mcp__google-workspace__*",
+  "mcp__notion__*",
+  "mcp__plugin_telegram_telegram__*"
+]
+```
+
+Do not touch `mcpServers` or `enabledPlugins`.
 
 ---
 
@@ -110,16 +146,16 @@ Same `permissions` block added to the existing file (which already has a populat
 ### docs/google-setup.md
 
 **Change 1 — Redirect URI checkpoint (step 4):**  
-Add a callout box immediately after the "Authorized redirect URI" line in step 4:
+After the existing "Authorized redirect URI: `http://localhost:8000/oauth2callback`" line in step 4, add a callout:
 
 > **⚠ Critical:** The redirect URI must be exactly `http://localhost:8000/oauth2callback`. A missing or mis-typed URI is the most common cause of OAuth failures. Double-check it in the console before clicking Create.
 
 **Change 2 — Production vs Testing (existing section):**  
-Expand "Avoiding the 7-day refresh-token expiry" to clarify:
-- «Publish to Production» does NOT make the app publicly discoverable
-- No Google verification required for personal use (only needed for public apps)
+Expand "Avoiding the 7-day refresh-token expiry" to explicitly clarify:
+- «Publish to Production» does NOT make the app publicly discoverable or listed in any Google directory
+- No Google verification required for personal use (verification is only required to remove the «unverified app» warning for end users of public apps)
 - The «unverified app» warning during OAuth is normal — click «Advanced → Go to app (unsafe)»
-- After publishing, refresh tokens last indefinitely
+- After publishing, refresh tokens last indefinitely (until revoked, scope-changed, or 6 months of inactivity)
 
 ### README.md
 
@@ -129,9 +165,9 @@ Replace `$EDITOR .env` with `nano .env  # or: vim .env`
 **Change 2 — Add `cd cgtd` to step 1:**  
 Add `cd cgtd` as an explicit line after `git clone` in step 1.
 
-**Change 3 — MCP note before `/gtd-config`:**  
-In step 4 ("Telegram chat — finish setup"), add a note:
-> Before sending `/gtd-config`, confirm Google and Notion MCPs are connected (the `/init-cgtd` pre-flight check will tell you if they aren't).
+**Change 3 — MCP note in step 2 (terminal bootstrap):**  
+After the `/init-cgtd` description in step 2, add:
+> The bootstrap includes a quick MCP connectivity check. If Google or Notion MCPs aren't reachable, you'll see a warning in the terminal — fix `data/claude-home/settings.json` and run `docker compose restart` before proceeding.
 
 ---
 
@@ -145,6 +181,7 @@ In step 4 ("Telegram chat — finish setup"), add a note:
 | `skills/gtd-interview/SKILL.md` | 1 |
 | `skills/init/SKILL.md` | 1 |
 | `docker-compose.yml` | 2 |
+| `docker-compose.example.yml` | 2 |
 | `.claude/settings.json.example` | 2 |
 | `data/claude-home/settings.json` | 2 |
 | `docs/google-setup.md` | 3 |
