@@ -10,6 +10,7 @@ services:
     container_name: cgtd-work
     env_file: .env.work
     environment:
+      - ALLOWED_FILE_DIRS=/root/.claude/channels/telegram/inbox:/root/.workspace-mcp/attachments
       - CGTD_DATA_DIR=/data
     volumes:
       - ./data-work:/data
@@ -25,6 +26,7 @@ services:
     container_name: cgtd-personal
     env_file: .env.personal
     environment:
+      - ALLOWED_FILE_DIRS=/root/.claude/channels/telegram/inbox:/root/.workspace-mcp/attachments
       - CGTD_DATA_DIR=/data
     volumes:
       - ./data-personal:/data
