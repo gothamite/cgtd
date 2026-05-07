@@ -23,8 +23,10 @@ End with `ok "$RID"` or `fail "$RID" "msg"`.
 
 For each `email` in `accounts`:
 
-- Gmail primary: `mcp__google-workspace__search_gmail_messages user_google_email=<email>` with `query="newer_than:24h -category:promotions -category:social"`. Includes read mail.
-- Gmail promo sweep: same tool, `query="newer_than:24h category:promotions"`. See "Promo deadline scan" below.
+- **Gmail primary (two-step fetch):**
+  1. **Header scan**: `mcp__google-workspace__search_gmail_messages user_google_email=<email>` with `query="newer_than:24h -category:promotions -category:social"`. This returns message IDs, subjects, senders, and dates — enough to classify.
+  2. **Full content fetch**: call `mcp__google-workspace__get_gmail_message_content` (or `get_gmail_messages_content_batch`) with `format: "full"` **only** for messages classified as potentially actionable from step 1. Fetch in batches of **max 10** messages per call.
+- **Gmail promo sweep**: `mcp__google-workspace__search_gmail_messages user_google_email=<email>` with `query="newer_than:24h category:promotions"`. Header scan only; fetch full content only for promos that pass the deadline keyword check.
 - Calendar today + 2 days: `mcp__google-workspace__get_events user_google_email=<email>`.
 
 Merge across accounts. Dedupe by `message_id` (Gmail) and `event_id` (Calendar). Tag the source account in Telegram output **only when ambiguous** (same title from two accounts).
@@ -32,6 +34,11 @@ Merge across accounts. Dedupe by `message_id` (Gmail) and `event_id` (Calendar).
 Also fetch Notion Next Actions + Inbox via `mcp__notion__notion-search` — for dedup only.
 
 ## Gmail classification
+
+**Notion date format:** When creating pages with a Date property, always use the expanded key format:
+- `"date:Date:start": "YYYY-MM-DD"` (required)
+- `"date:Date:end": "YYYY-MM-DD"` (optional, for ranges such as hotel stays)
+Do NOT use `"Date": "YYYY-MM-DD"` — this causes a validation error.
 
 1. Actionable from human / deadline / invoice with due / meeting RSVP → **Next Actions** with Date.
 2. Booking/ticket/confirmation with concrete date (cinema, concert, hotel, flight, restaurant) → **Next Actions** with Date. Hotels/trips: `Date.start` + `Date.end`.
@@ -97,6 +104,9 @@ Do NOT 🚨 priority-signal items alone.
 
 ## Failure modes
 
-- Notion MCP unauthenticated → skip Notion writes silently, still 🚨 ping for urgent, mark log `ok` (degraded mode).
-- google-workspace returns `invalid_grant` for an account → log `fail` with `google_auth_expired:<email>`, send Telegram «Google auth for <email> expired, run `/cgtd-reauth <email>`», exit. See `cgtd-reauth/SKILL.md`.
+- **Per-account Google auth failure**: if one account returns `invalid_grant`, do NOT exit. Instead:
+  1. Send Telegram: «Google auth для `<email>` истёк. Запусти `/cgtd-reauth google <email>`».
+  2. Skip that account, continue processing remaining accounts in `config.google.accounts[]`.
+  3. After all accounts are processed: if at least one account succeeded → log cron run as `degraded` (not `fail`). If all accounts failed → log `fail`.
+- **Notion auth failure**: if Notion MCP returns an auth error → send Telegram «Notion auth истёк. Запусти `/cgtd-reauth notion`». Skip all Notion writes. Continue Gmail/Calendar processing. Log as `degraded`.
 - Gmail/Calendar timeout → continue with remaining sources; silent if all unavailable; log `fail` with the error.
