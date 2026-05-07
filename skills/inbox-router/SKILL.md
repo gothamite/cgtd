@@ -55,7 +55,11 @@ Do NOT route unknown commands to Inbox.
      2. Copy the file: `cp <image_path> /root/.workspace-mcp/attachments/<basename>` via Bash (extract basename from the path).
      3. Upload via `mcp__google-workspace__create_drive_file user_google_email=<config.google.primary> folder_id=<config.google.drive_inbox_folder_id> fileUrl=file:///root/.workspace-mcp/attachments/<basename>`.
      4. Delete the copy: `rm /root/.workspace-mcp/attachments/<basename>` via Bash.
-   - **For `attachment_file_id`**: call `mcp__plugin_telegram_telegram__download_attachment` to get the local path, then apply the same mkdir+copy+upload+delete pattern using that path.
+   - **For `attachment_file_id`**: call `mcp__plugin_telegram_telegram__download_attachment` to get the local path, then:
+     1. Run `mkdir -p /root/.workspace-mcp/attachments` via Bash.
+     2. Copy: `cp <downloaded_path> /root/.workspace-mcp/attachments/<basename>` via Bash.
+     3. Upload via `mcp__google-workspace__create_drive_file user_google_email=<config.google.primary> folder_id=<config.google.drive_inbox_folder_id> fileUrl=file:///root/.workspace-mcp/attachments/<basename>`.
+     4. Delete the copy: `rm /root/.workspace-mcp/attachments/<basename>` via Bash.
    - Get the shareable link via `mcp__google-workspace__get_drive_shareable_link` after upload.
    - Do NOT add a Drive-upload-failed fallback here — the existing `## Failure modes` section already handles it.
 4. **Apply rule files** from `/data/memory/`:
