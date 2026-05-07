@@ -80,7 +80,7 @@ Full guide: [`docs/quickstart.md`](docs/quickstart.md).
 
 | Command | What it does |
 |---|---|
-| `/gtd-config` | Re-run / continue the Telegram interview |
+| `/gtd-config` or `/cgtd` | Re-run / continue the Telegram interview |
 | `/cgtd-reauth google <email>` | Re-authorize a Google account when its token expires |
 | `/cgtd-reauth notion` | Re-authorize Notion |
 | `/morning`, `/evening` | Trigger the corresponding skill on demand |

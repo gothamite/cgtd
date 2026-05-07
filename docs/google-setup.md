@@ -52,8 +52,6 @@ During OAuth you will see an «unverified app» warning — this is normal. Clic
 
 You do **not** need to complete Google's app verification process. Verification is only required to suppress the warning for *other people* using a public app.
 
-If your scopes include sensitive/restricted ones (Gmail read, Drive read), Google shows an "unverified app" warning during the OAuth flow. You can click "Advanced → Go to <app> (unsafe)" and proceed — it's *your* app, you trust it. **You do not need to complete Google's app verification process** for personal use; verification is only required if you want the warning to disappear for end users (which matters for public apps, not for you).
-
 After publishing, refresh tokens last indefinitely (until revoked, scope-changed, or 6 months of inactivity).
 
 ## Adding a friend's account
