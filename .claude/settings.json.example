@@ -1,4 +1,14 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash*",
+      "Read*",
+      "Write*",
+      "mcp__google-workspace__*",
+      "mcp__notion__*",
+      "mcp__plugin_telegram_telegram__*"
+    ]
+  },
   "mcpServers": {
     "google-workspace": {
       "type": "stdio",
