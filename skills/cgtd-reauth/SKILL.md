@@ -30,8 +30,8 @@ For each target email:
 ## Procedure — Notion
 
 1. Send Telegram:
-   > Пришли новый Notion Internal Integration Token (начинается с `secret_...`).
-2. Validate: must start with `secret_`. If invalid, ask again.
+   > Пришли новый Notion Internal Integration Token (начинается с `ntn_` или `secret_`).
+2. Validate: must start with `ntn_` or `secret_`. If invalid, ask again.
 3. Save to `config.notion.api_key` in `/data/config.json`.
 4. Reply:
    > ✓ Токен обновлён. Перезапусти контейнер чтобы применить:

@@ -74,10 +74,10 @@ After the loop: confirm the primary («Основной = `<first email>`. Ме�
    > Нужен Notion Internal Integration Token:
    > 1. Открой notion.so → Settings → Connections → Develop or manage integrations → New integration
    > 2. Type: **Internal**. Название — любое (например `cgtd`).
-   > 3. Скопируй **Internal Integration Token** (начинается с `secret_...`) и пришли сюда.
+   > 3. Скопируй **Internal Integration Token** (начинается с `ntn_` или `secret_`) и пришли сюда.
 
 3. When user sends the token:
-   - Validate format: must start with `secret_`. If invalid, ask again.
+   - Validate format: must start with `ntn_` or `secret_`. If invalid, ask again.
    - Save to `config_draft.notion.api_key` and write to `/data/config.json`.
    - Advance `init-progress.json` `section` to `"drive_folder"`.
 
