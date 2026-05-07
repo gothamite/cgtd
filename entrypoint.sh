@@ -44,4 +44,12 @@ if [ ! -f "$DATA/install_id" ]; then
   head -c 4 /dev/urandom | xxd -p > "$DATA/install_id"
 fi
 
+# Warn if container TZ doesn't match config.user.timezone
+if [ -f "$DATA/config.json" ]; then
+  cfg_tz=$(jq -r '.user.timezone // empty' "$DATA/config.json" 2>/dev/null)
+  if [ -n "$cfg_tz" ] && [ "$cfg_tz" != "$TZ" ]; then
+    echo "⚠ TZ mismatch: container TZ=$TZ but config.user.timezone=$cfg_tz. Update TZ in docker-compose.yml and run 'docker compose up -d'."
+  fi
+fi
+
 exec "$@"

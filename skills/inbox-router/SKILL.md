@@ -7,6 +7,23 @@ description: Route inbound Telegram messages. While init is in progress, dispatc
 
 Triggered when a Telegram message arrives via the channel plugin (`<channel source="telegram" chat_id="..." ...>` tag in the session).
 
+## Cron pre-flight (every message)
+
+Before any routing, silently check and restore missing cron jobs:
+
+1. Read `/data/config.json`. If `config.jobs.cron_ids` is absent, empty, or all values are null → skip (init not complete yet).
+2. Call `CronList` → collect the set of active cron IDs.
+3. For each key in `config.jobs.cron_ids`:
+   - If the stored ID is null or not in the active CronList set → recreate it:
+     - **`proactive_inbox_weekday`**: expression = `config.jobs.proactive_inbox.cron_weekday` (fall back to `config.jobs.proactive_inbox.cron`); prompt = `Invoke skill proactive-inbox. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`
+     - **`proactive_inbox_weekend`**: expression = `config.jobs.proactive_inbox.cron_weekend` (fall back to `config.jobs.proactive_inbox.cron`); prompt = `Invoke skill proactive-inbox. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`
+     - **`morning_ritual`**: expression = `config.jobs.morning_ritual.cron`; prompt = `Invoke skill morning-ritual. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`
+     - **`evening_review`**: expression = `config.jobs.evening_review.cron`; prompt = `Invoke skill evening-review. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`
+     - **`process_inbox`**: expression = `config.jobs.process_inbox.cron`; prompt = `Invoke skill process-inbox. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`
+     - Save the new ID back to `config.jobs.cron_ids[key]`.
+4. If any ID was recreated, write the updated `config.json` to disk.
+5. No user notification. Continue to routing.
+
 ## Pre-init guard (CRITICAL)
 
 Read `/data/config.json`. **If the file is missing OR `init_complete` is `false` OR not set:**
@@ -27,6 +44,7 @@ Match the start of the message text:
 - `/evening` / `/вечер` → invoke `evening-review` immediately
 - `/inbox` / `/разбери` → invoke `process-inbox` immediately
 - `/status` → reply with last-ok timestamps from `cron-log.sh last-ok` for each configured job
+- `/cgtd-timezone <tz>` → invoke `cgtd-timezone` skill
 
 If the message doesn't start with `/`, route to Inbox per the logic below.
 
@@ -40,6 +58,7 @@ If the message starts with `/` but matches none of the commands above, reply wit
 > `/evening` / `/вечер` — вечерний обзор
 > `/inbox` / `/разбери` — обработка Inbox
 > `/status` — статус cron-задач
+> `/cgtd-timezone <tz>` — изменить часовой пояс
 >
 > Обычное сообщение (без `/`) → попадает в Notion Inbox.
 
