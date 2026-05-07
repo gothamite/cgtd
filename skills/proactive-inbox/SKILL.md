@@ -41,7 +41,7 @@ For each `email` in `accounts`:
 
 Merge across accounts. Dedupe by `message_id` (Gmail) and `event_id` (Calendar). Tag the source account in Telegram output **only when ambiguous** (same title from two accounts).
 
-Also fetch Notion Next Actions + Inbox via `mcp__notion__notion-search` — for dedup only.
+Also fetch Notion Next Actions + Inbox via `mcp__notion__search` — for dedup only.
 
 ## Gmail classification
 
@@ -104,7 +104,7 @@ Do NOT use `"Date": "YYYY-MM-DD"` — this causes a validation error.
 
 ## Dedup
 
-`mcp__notion__notion-search` by subject/thread_id with `data_source_url` before create.
+`mcp__notion__search` by subject/thread_id with `data_source_url` before create.
 
 ## Output (one Telegram message via `mcp__plugin_telegram_telegram__reply` to `config.telegram.chat_id`)
 

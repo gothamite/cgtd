@@ -64,15 +64,32 @@ For each `email` in the user's list:
 
 After the loop: confirm the primary («Основной = `<first email>`. Менять?»). Save `config.google.primary`.
 
-## Section 4 — Notion OAuth
+## Section 4 — Notion API key
 
-One message:
+1. Call `mcp__notion__search` with `query=""`.
+   - If it returns valid results or an empty list → key already configured (came from `.env`). Advance `init-progress.json` `section` to `"drive_folder"` and continue to Section 5 (Drive folder).
+   - If it returns an error (MCP not connected / key missing) → proceed to step 2.
 
-> Теперь авторизую Notion. Открой эту ссылку **на том же компьютере** и при подключении выбери, **какие страницы и базы данных дать мне доступ**. Я могу видеть только то, что ты явно поделил со мной — всё остальное в твоём workspace остаётся приватным. Если у тебя ещё нет GTD-страниц в Notion — ничего страшного, я создам их за тебя дальше.
+2. Send Telegram message:
+   > Нужен Notion Internal Integration Token:
+   > 1. Открой notion.so → Settings → Connections → Develop or manage integrations → New integration
+   > 2. Type: **Internal**. Название — любое (например `cgtd`).
+   > 3. Скопируй **Internal Integration Token** (начинается с `secret_...`) и пришли сюда.
 
-Trigger Notion OAuth by calling any Notion MCP tool (e.g. `mcp__notion__notion-search` with empty query). The hosted MCP at `mcp.notion.com/mcp` returns an OAuth URL on first call. Forward the URL to Telegram.
+3. When user sends the token:
+   - Validate format: must start with `secret_`. If invalid, ask again.
+   - Save to `config_draft.notion.api_key` and write to `/data/config.json`.
+   - Advance `init-progress.json` `section` to `"drive_folder"`.
 
-Wait for «готово». Retry the call. On success, advance.
+4. Reply:
+   > ✓ Токен сохранён. Нужен перезапуск контейнера чтобы он подхватился:
+   > ```
+   > docker compose restart assistant
+   > docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
+   > ```
+   > После перезапуска напиши `/gtd-config` — продолжим с настройки баз данных Notion.
+
+5. On next `/gtd-config` invocation: state machine loads `section = "drive_folder"` and resumes there. At the top of the `drive_folder` handler, call `mcp__notion__search` with `query=""` to verify connectivity. If it fails, tell the user the key isn't working and prompt them to check `.env` / restart again. If it succeeds, proceed normally.
 
 ## Section 5 — Drive folder
 
@@ -100,7 +117,7 @@ Ask: «У тебя уже настроена GTD-система в Notion (Inbox
 
 If yes:
 - Ask the user for the URL of any Notion page where the GTD parent should live (or just «создать на верхнем уровне workspace»).
-- Call `mcp__notion__notion-create-pages` to create:
+- Call `mcp__notion__create-a-page` to create:
   - Parent page «🗂 GTD»
   - Inside it: 4 databases (Inbox, Next Actions, Tasks, Notes) with the schemas from the OLD `notion-setup.md` (Inbox: Name/Source/Created/URL; Next Actions: Name/Status/Date/Project/Eisenhower; Tasks: Name/Status/Deadline; Notes: Name/Category/Tags/Source/URL)
   - One page «📦 Inbox Archive»
@@ -124,9 +141,9 @@ Ask, one question per Telegram message, waiting for reply:
 6. «База для **заметок / референсов** (статьи, контакты, идеи)? URL или `нет`.»
 7. «Куда ты архивируешь обработанные Inbox-записи? URL страницы-архива, или `удаляю` / `меняю статус` / `нет`.»
 
-For each provided URL: call `mcp__notion__notion-fetch` to validate access. If 403/404, reply «не вижу — поделись страницей с интеграцией (Share → Connections → cgtd) и пришли URL ещё раз». Save IDs into `config.notion.*_id`.
+For each provided URL: call `mcp__notion__retrieve-a-page` to validate access. If 403/404, reply «не вижу — поделись страницей с интеграцией (Share → Connections → cgtd) и пришли URL ещё раз». Save IDs into `config.notion.*_id`.
 
-Then probe the schemas. For each provided database, call `mcp__notion__notion-fetch` and inspect the property list:
+Then probe the schemas. For each provided database, call `mcp__notion__retrieve-a-page` and inspect the property list:
 
 8. For the Inbox/Next Actions/Tasks DBs that exist:
    - Find the **Status** property (any property of type `status` or `select`). Send: «В `<DB>` твой статус-проперти называется `<name>` со значениями: `<list>`. Какое значение означает «не сделано / новое»? «в работе»? «сделано»? «отменено»? «отложено / someday»? Можно пропустить, если значения не подходят.»

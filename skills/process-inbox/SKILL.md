@@ -21,9 +21,9 @@ End with `ok "$RID"` or `fail "$RID" "msg"`.
 
 ## Procedure
 
-1. Query Inbox via `mcp__notion__notion-query-database-view` (fallback: `notion-search` on `config.notion.inbox_id`).
+1. Query Inbox via `mcp__notion__query-data-source` (fallback: `notion-search` on `config.notion.inbox_id`).
 2. For each entry, extract implicit date/deadline per `/data/memory/feedback_implicit_dates.md` + `feedback_contextual_deadlines.md`.
-3. **Dedup check.** Before creating in destination, `notion-search` the target data source for the entry's title — fuzzy match (lemmatize, drop filler words). If a candidate duplicate exists AND is not Done/Cancelled:
+3. **Dedup check.** Before creating in destination, `mcp__notion__search` the target data source for the entry's title — fuzzy match (lemmatize, drop filler words). If a candidate duplicate exists AND is not Done/Cancelled:
    - Exact/near-exact match → skip create; archive the Inbox entry; mention in ⚠️ «duplicate, archived original, existing: [link]».
    - Partial match → don't auto-skip; surface in ⚠️ with both links, ask user via Telegram («дубликат X? [a] объединить / [b] оставить обе / [c] отменить»).
    - Duplicate exists but Done/Cancelled → proceed with create.
@@ -32,7 +32,8 @@ End with `ok "$RID"` or `fail "$RID" "msg"`.
    - **(a') atomic without time signal** → Next Actions, Status=`Someday/Maybe`. Apply contextual inference first: daily-use repair 1–2 weeks, seasonal clothing 3–4 weeks before peak, health/admin 2 weeks, gifts = event date − buffer, pure-want → Someday/Maybe.
    - **(b) multi-step / project** (several verbs, "проект", "organize", "prepare for X") → `config.notion.tasks_id`, subtasks in body, deadline if present.
    - **(c) informational** (reference, link, quote, idea, contact, recipe, article, fact) → `config.notion.notes_id` with Category + 2–4 Tags + URL, Source=Telegram.
-5. After creating destination → move Inbox entry to 📦 Archive: `mcp__notion__notion-move-pages new_parent.page_id=${config.notion.inbox_archive_page_id}`.
+   - Create destination via `mcp__notion__create-a-page`.
+5. After creating destination → move Inbox entry to 📦 Archive: `mcp__notion__move-page new_parent.page_id=${config.notion.inbox_archive_page_id}`.
 6. Ambiguous entries → leave in Inbox, collect for ⚠️ section.
 
 ## Attachments

@@ -26,7 +26,7 @@ End with `ok "$RID"` or `fail "$RID" "msg"`.
    - Calendar events today across all `config.google.accounts[]`.
    - NA with `Date.start = today` (any `is_datetime`). User already scheduled them.
 3. **Gmail 24h.** Skip promo/social, only actionable/decision items. Cross-account.
-4. **TODAY PLAN with time blocks.** Fill around anchors per `config.schedule.weekday_blocks` (or weekend rule on Sat/Sun). Propose slots with NA tokens for approval. Do NOT re-slot anchored NA. Write approved items via `mcp__notion__notion-update-page` only after user confirms.
+4. **TODAY PLAN with time blocks.** Fill around anchors per `config.schedule.weekday_blocks` (or weekend rule on Sat/Sun). Propose slots with NA tokens for approval. Do NOT re-slot anchored NA. Write approved items via `mcp__notion__update-a-page` only after user confirms.
 5. **Free-slot reserve.** Pull from NA with `Status=Someday/Maybe AND no Date`, prioritized by Eisenhower (Q1→Q2→Q3→Q4).
 6. **Closing line** in `config.user.locale`. Examples: en «day mapped, let's go», ru «поехали, день размечен», de «Tagesplan steht».
 
@@ -36,7 +36,7 @@ Write a JSON line to `/data/pending-reviews.jsonl`:
 ```
 {"cron_id":"morning-ritual","ts":"<iso>","items":[{"na_id":"...","title":"...","start":"...","end":"..."}]}
 ```
-TTL 6h. When the user replies in Telegram («1, 3 ok; 2 перенести»), the inbox-router skill matches against this entry, applies via `notion-update-page`, removes the entry. On SessionStart catch-up, entries older than TTL are dropped silently.
+TTL 6h. When the user replies in Telegram («1, 3 ok; 2 перенести»), the inbox-router skill matches against this entry, applies via `update-a-page`, removes the entry. On SessionStart catch-up, entries older than TTL are dropped silently.
 
 ## Slotting
 

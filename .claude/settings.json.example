@@ -22,8 +22,12 @@
       }
     },
     "notion": {
-      "type": "http",
-      "url": "https://mcp.notion.com/mcp"
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@notionhq/notion-mcp-server"],
+      "env": {
+        "NOTION_API_KEY": "${NOTION_API_KEY}"
+      }
     }
   }
 }

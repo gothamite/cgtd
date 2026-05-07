@@ -8,7 +8,7 @@ description: Re-run OAuth for Google account(s) or Notion when refresh tokens ex
 Invoked as:
 - `/cgtd-reauth google <email>` — single Google account
 - `/cgtd-reauth google --all` — every Google account in `config.google.accounts[]`
-- `/cgtd-reauth notion` — Notion (hosted OAuth MCP)
+- `/cgtd-reauth notion` — Notion (update Internal Integration Token)
 
 Runs over Telegram or terminal — both work. The user opens the OAuth link on the same machine running Docker (Telegram Desktop recommended for the Telegram path).
 
@@ -29,10 +29,17 @@ For each target email:
 
 ## Procedure — Notion
 
-1. Clear Notion's cached OAuth token from `/data/claude-home/` (location depends on Claude Code's MCP token storage; if uncertain, advise the user to remove the `notion` MCP via `claude mcp remove notion` and re-add it via the settings.json template — the next call triggers fresh OAuth).
-2. Call `mcp__notion__notion-search` with empty query — returns OAuth URL.
-3. Send URL. User opens on Docker host, signs in, **re-picks pages to share**.
-4. Wait for «done». Retry. On success → reply «✓ Notion reauthorized».
+1. Send Telegram:
+   > Пришли новый Notion Internal Integration Token (начинается с `secret_...`).
+2. Validate: must start with `secret_`. If invalid, ask again.
+3. Save to `config.notion.api_key` in `/data/config.json`.
+4. Reply:
+   > ✓ Токен обновлён. Перезапусти контейнер чтобы применить:
+   > ```
+   > docker compose restart assistant
+   > docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
+   > ```
+   > После перезапуска Notion MCP подхватит новый токен автоматически.
 
 ### Если `/cgtd-reauth notion` не помогает (только с хостовой оболочки)
 

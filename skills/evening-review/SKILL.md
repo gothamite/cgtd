@@ -29,7 +29,7 @@ Silent if everything is empty.
 
 ## Fetching today's NA
 
-`notion-search` cannot filter by Date field. Use `notion-search` with query = today's ISO date (e.g. `"2026-04-26"`) against `config.notion.next_actions_id` — semantic search reliably surfaces entries with Date=today. Do NOT rely on `created_date`.
+`search` cannot filter by Date field. Use `search` with query = today's ISO date (e.g. `"2026-04-26"`) against `config.notion.next_actions_id` — semantic search reliably surfaces entries with Date=today. Do NOT rely on `created_date`.
 
 ## Awaiting user decisions
 
@@ -38,7 +38,7 @@ Persist proposal to `/data/pending-reviews.jsonl`:
 {"cron_id":"evening-review","ts":"<iso>","items":[{"na_id":"...","title":"...","date":"today"}]}
 ```
 
-When user replies in Telegram, inbox-router matches against the most recent `evening-review` entry whose items aren't all resolved, applies via `notion-update-page`, removes the entry.
+When user replies in Telegram, inbox-router matches against the most recent `evening-review` entry whose items aren't all resolved, applies via `update-a-page`, removes the entry.
 
 TTL 12h. On SessionStart catch-up, items not acted on get the default action: **«move to tomorrow»** (shift Date +1, keep status), silently.
 

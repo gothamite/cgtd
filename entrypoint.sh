@@ -52,4 +52,24 @@ if [ -f "$DATA/config.json" ]; then
   fi
 fi
 
+# Migrate Notion MCP from HTTP to stdio if needed
+if [ -f "$DATA/claude-home/settings.json" ]; then
+  notion_type=$(jq -r '.mcpServers.notion.type // empty' "$DATA/claude-home/settings.json" 2>/dev/null)
+  if [ "$notion_type" = "http" ]; then
+    jq '.mcpServers.notion = {"type":"stdio","command":"npx","args":["-y","@notionhq/notion-mcp-server"],"env":{"NOTION_API_KEY":"${NOTION_API_KEY}"}}' \
+      "$DATA/claude-home/settings.json" > "$DATA/claude-home/settings.json.tmp" && \
+      mv "$DATA/claude-home/settings.json.tmp" "$DATA/claude-home/settings.json" || \
+      rm -f "$DATA/claude-home/settings.json.tmp"
+    echo "✓ Notion MCP migrated to stdio in settings.json"
+  fi
+fi
+
+# Resolve NOTION_API_KEY: prefer env var, fall back to config.json
+if [ -z "${NOTION_API_KEY:-}" ] && [ -f "$DATA/config.json" ]; then
+  cfg_notion_key=$(jq -r '.notion.api_key // empty' "$DATA/config.json" 2>/dev/null)
+  if [ -n "$cfg_notion_key" ]; then
+    export NOTION_API_KEY="$cfg_notion_key"
+  fi
+fi
+
 exec "$@"
