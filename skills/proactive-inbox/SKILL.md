@@ -35,11 +35,6 @@ Also fetch Notion Next Actions + Inbox via `mcp__notion__notion-search` — for 
 
 ## Gmail classification
 
-**Notion date format:** When creating pages with a Date property, always use the expanded key format:
-- `"date:Date:start": "YYYY-MM-DD"` (required)
-- `"date:Date:end": "YYYY-MM-DD"` (optional, for ranges such as hotel stays)
-Do NOT use `"Date": "YYYY-MM-DD"` — this causes a validation error.
-
 1. Actionable from human / deadline / invoice with due / meeting RSVP → **Next Actions** with Date.
 2. Booking/ticket/confirmation with concrete date (cinema, concert, hotel, flight, restaurant) → **Next Actions** with Date. Hotels/trips: `Date.start` + `Date.end`.
 3. Booking without action date → **Inbox**.
@@ -92,6 +87,11 @@ Triggers:
 
 Do NOT 🚨 priority-signal items alone.
 
+**Notion date format:** When creating pages with a Date property, always use the expanded key format:
+- `"date:Date:start": "YYYY-MM-DD"` (required)
+- `"date:Date:end": "YYYY-MM-DD"` (optional, for ranges such as hotel stays)
+Do NOT use `"Date": "YYYY-MM-DD"` — this causes a validation error.
+
 ## Dedup
 
 `mcp__notion__notion-search` by subject/thread_id with `data_source_url` before create.
@@ -108,5 +108,5 @@ Do NOT 🚨 priority-signal items alone.
   1. Send Telegram: «Google auth для `<email>` истёк. Запусти `/cgtd-reauth google <email>`».
   2. Skip that account, continue processing remaining accounts in `config.google.accounts[]`.
   3. After all accounts are processed: if at least one account succeeded → log cron run as `degraded` (not `fail`). If all accounts failed → log `fail`.
-- **Notion auth failure**: if Notion MCP returns an auth error → send Telegram «Notion auth истёк. Запусти `/cgtd-reauth notion`». Skip all Notion writes. Continue Gmail/Calendar processing. Log as `degraded`.
+- **Notion auth failure**: if Notion MCP returns an auth error → send Telegram «Notion auth истёк. Запусти `/cgtd-reauth notion`». Skip all Notion writes. Continue Gmail/Calendar processing. Urgent 🚨 pings still fire (they are Telegram messages, not Notion writes). Log as `degraded`.
 - Gmail/Calendar timeout → continue with remaining sources; silent if all unavailable; log `fail` with the error.
