@@ -65,6 +65,22 @@ Create `/data/config.json` with `init_complete: false` and `install_id` set:
 
 This is the marker that `inbox-router` uses to know "we're between Phase 1 and Phase 2 — route everything to gtd-interview, not to a not-yet-existing Inbox."
 
+### 4.5 Pre-flight MCP check
+
+Before printing "✓ Bootstrap done", verify that both MCPs are reachable (not just not-yet-authed):
+
+1. Call `mcp__google-workspace__list_calendars` with any placeholder email (e.g. `test@example.com`).
+   - If it returns an OAuth URL → expected, everything is wired. Do not warn.
+   - If it returns a tool-layer error (connection refused, server not found, non-200 that is not a redirect) → print in terminal: «⚠ google-workspace MCP is not responding. Check `data/claude-home/settings.json` and run `docker compose restart`.»
+
+2. Call `mcp__notion__notion-search` with an empty query `""`.
+   - If it returns an OAuth URL or any valid response → expected. Do not warn.
+   - If it returns a tool-layer error (network failure, unreachable server) → print: «⚠ Notion MCP is not responding. Check `data/claude-home/settings.json`.»
+
+Auth errors (OAuth URL in the response body) are the normal pre-auth state — do not flag them. Only flag hard connection/configuration failures.
+
+Continue to step 5 regardless (MCP issues can be fixed before the user runs `/gtd-config`).
+
 ### 5. Hand off
 
 Print, in the user's terminal:
