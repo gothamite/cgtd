@@ -119,7 +119,7 @@ Ask, one question per Telegram message, waiting for reply:
 
 4. «У тебя есть отдельная база для **Задач** — конкретных шагов внутри проектов (например "Залить фундамент", "Подключить отопление")? Если да — URL; если нет — `нет`.» Save DB ID into `config.notion.tasks_id`. Set `config.gtd.has_tasks_db: true` if URL provided, `false` if "нет". *(Все четыре комбинации валидны: оба / только Projects / только Tasks / ни того ни другого.)*
 
-5. «Как ты ведёшь расписание рядом с Next Actions? `1)` Calendar и NA — одна система (NA сразу попадают в Календарь) `2)` раздельно — NA в Notion, встречи в Google Calendar `3)` не использую Календарь для планирования.» Save `config.gtd.calendar_integration: "unified" | "separate" | "none"`.
+5. «Как ты ведёшь расписание рядом с Next Actions? `1)` Calendar и NA — одна база (NA сразу попадают в Календарь) `2)` раздельно — NA в Notion, встречи в Google Calendar `3)` не использую Календарь для планирования.» Save `config.gtd.calendar_integration: "unified" | "separate" | "none"`.
 
 6. «База для **заметок / референсов** (статьи, контакты, идеи)? URL или `нет`.»
 7. «Куда ты архивируешь обработанные Inbox-записи? URL страницы-архива, или `удаляю` / `меняю статус` / `нет`.»
@@ -148,7 +148,7 @@ Based on `config.gtd.*`, write customized SKILL.md files into `/data/skills-over
   |---|---|---|
   | false | false | All multi-step work → Next Actions. Drop Tasks/Projects routing branches. |
   | true | false | Multi-step goals → `config.notion.projects_id`. Steps tracked as NA directly. |
-  | false | true | Steps → `config.notion.tasks_id`. No Projects level — route project-like items to Tasks. |
+  | false | true | Steps → `config.notion.tasks_id`. No Projects level — route project-like items to Tasks DB as the closest available container (not to Next Actions). |
   | true | true | Full hierarchy: Goals → Projects, Steps → Tasks, Atomic → Next Actions. |
 
   If a flag is `true` but the corresponding `_id` is null (URL validation failed during interview), emit a Telegram warning on first run: «Настроена база [Projects/Tasks] но ID не найден — проверь `/gtd-config`.»
@@ -157,7 +157,7 @@ Based on `config.gtd.*`, write customized SKILL.md files into `/data/skills-over
 
   If user has no Notes DB, drop the Notes branch and inline references into Inbox body.
 - **morning-ritual** — replace status filter («Status ∉ {Done, Cancelled}») with the user's terms. Replace Eisenhower references with `config.gtd.priority_scheme` (drop entirely if `none`). For `calendar_integration: "unified"`: present Calendar and NA as one merged schedule, deduplicate by event_id. For `"separate"`: two parallel sections (Calendar, then NA). For `"none"`: omit Calendar section.
-- **evening-review** — same status replacements.
+- **evening-review** — same status replacements. Same `calendar_integration` rendering as morning-ritual: for `"unified"` → merged schedule with dedup by event_id; for `"separate"` → two parallel sections; for `"none"` → omit Calendar section.
 - **proactive-inbox** — replace status terms; if user has no Notes DB, route newsletters/references to Inbox body instead.
 - **inbox-router** — replace `notion.inbox_id` reference (already config-driven, so usually no overlay needed unless user opted out of Inbox-everything).
 
