@@ -14,6 +14,7 @@ Before any routing, silently check and restore missing cron jobs:
 1. Read `/data/config.json`. If `config.jobs.cron_ids` is absent, empty, or all values are null → skip (init not complete yet).
 2. Call `CronList` → collect the set of active cron IDs.
 3. For each key in `config.jobs.cron_ids`:
+   - If the corresponding job has `enabled: false` in `config.jobs` (check `config.jobs.proactive_inbox.enabled` for both proactive_inbox keys; check `config.jobs.<key>.enabled` for others) → skip that key entirely.
    - If the stored ID is null or not in the active CronList set → recreate it:
      - **`proactive_inbox_weekday`**: expression = `config.jobs.proactive_inbox.cron_weekday` (fall back to `config.jobs.proactive_inbox.cron`); prompt = `Invoke skill proactive-inbox. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`
      - **`proactive_inbox_weekend`**: expression = `config.jobs.proactive_inbox.cron_weekend` (fall back to `config.jobs.proactive_inbox.cron`); prompt = `Invoke skill proactive-inbox. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`

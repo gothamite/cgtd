@@ -27,6 +27,8 @@ Invoked by inbox-router when the user sends `/cgtd-timezone <tz>`.
 
 5. **Recreate crons.** Read `config.jobs`. For each job:
 
+   Skip any job where `config.jobs.<job_name>.enabled == false`. For `proactive_inbox`, check `config.jobs.proactive_inbox.enabled`.
+
    - **`morning_ritual`**: `CronCreate` with expression `config.jobs.morning_ritual.cron`, prompt `Invoke skill morning-ritual. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.` Save new ID to `config.jobs.cron_ids.morning_ritual`.
    - **`evening_review`**: `CronCreate` with expression `config.jobs.evening_review.cron`, prompt `Invoke skill evening-review. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.` Save new ID to `config.jobs.cron_ids.evening_review`.
    - **`process_inbox`**: `CronCreate` with expression `config.jobs.process_inbox.cron`, prompt `Invoke skill process-inbox. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.` Save new ID to `config.jobs.cron_ids.process_inbox`.

@@ -177,20 +177,21 @@ For each preset, fill `config.schedule.weekday_blocks` and `config.schedule.week
 
 For each of the four jobs, send a separate Telegram message:
 
-> `proactive-inbox` — каждые 2 часа днём, сканит Gmail+Calendar, кладёт в Notion. Включить? Расписание `13 8-20/2 * * *` подходит?
+> `proactive-inbox` — сканит Gmail+Calendar, кладёт в Notion. Включить? Расписание (будни) `13 8-20/2 * * 1-5`, (выходные) `13 8,21 * * 0,6` — подходит?
 
-User answers yes/no + optional cron override per job. **Do not** offer an "all enabled" Enter-default — every job is an explicit answer.
+User answers yes/no + optional cron overrides (weekday and weekend separately) per job. **Do not** offer an "all enabled" Enter-default — every job is an explicit answer.
 
-Save into `config.jobs.<name>.{enabled,cron}`.
+Save into `config.jobs.<name>.{enabled,cron}`. For `proactive_inbox`: save `cron_weekday` and `cron_weekend` instead of a single `cron`.
 
 ## Section 9 — finalize
 
 1. Write `/data/config.json` atomically: merge `config_draft` with `init_complete: true`, `init_completed_at: <iso>`. Use `tmp` then `mv`.
 2. Delete `/data/init-progress.json`.
-3. For each enabled job, call `CronCreate`:
-   - `name` = `cgtd-${install_id}-${job}`
-   - `cron` = `config.jobs.<job>.cron`
-   - `prompt` = `Invoke skill ${job}. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`
+3. For each enabled job, call `CronCreate`. Save resulting IDs into `config.jobs.cron_ids`:
+   - For all jobs except `proactive_inbox`: one `CronCreate` with `cron` = `config.jobs.<job>.cron`, `prompt` = `Invoke skill <skill-name>. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.` Save ID to `config.jobs.cron_ids.<job_name>`.
+   - For `proactive_inbox`: two `CronCreate` calls — one with `cron_weekday` expression (ID → `config.jobs.cron_ids.proactive_inbox_weekday`) and one with `cron_weekend` expression (ID → `config.jobs.cron_ids.proactive_inbox_weekend`). Both use `prompt` = `Invoke skill proactive-inbox. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`
+   - Skill name mapping: `morning_ritual`→`morning-ritual`, `evening_review`→`evening-review`, `process_inbox`→`process-inbox`.
+   - After all CronCreate calls, write the full `config.jobs.cron_ids` block to `/data/config.json`.
 4. Run a **dry-run** of each enabled skill (skill respects a `--dry-run` flag and prints what it would do). Report results.
 5. Send final Telegram message:
 
