@@ -115,30 +115,48 @@ Ask, one question per Telegram message, waiting for reply:
 
 1. «Скинь URL твоей **Inbox** базы (или эквивалента — куда падает всё непомеченное).»
 2. «Скинь URL **Next Actions** или эквивалента (атомарные действия с датой).»
-3. «У тебя есть отдельная база для **проектов / многошаговых задач** (Tasks)? Если да — URL. Если нет — напиши `нет`.»
-4. «База для **заметок / референсов** (статьи, контакты, идеи)? URL или `нет`.»
-5. «Куда ты архивируешь обработанные Inbox-записи? URL страницы-архива, или `удаляю` / `меняю статус` / `нет`.»
+3. «У тебя есть отдельная база для **Проектов** — многошаговых целей верхнего уровня (например "Построить дом", "Запустить продукт")? Если да — URL; если нет — `нет`.» Save DB ID into `config.notion.projects_id`. Set `config.gtd.has_projects_db: true` if URL provided, `false` if "нет".
+
+4. «У тебя есть отдельная база для **Задач** — конкретных шагов внутри проектов (например "Залить фундамент", "Подключить отопление")? Если да — URL; если нет — `нет`.» Save DB ID into `config.notion.tasks_id`. Set `config.gtd.has_tasks_db: true` if URL provided, `false` if "нет". *(Все четыре комбинации валидны: оба / только Projects / только Tasks / ни того ни другого.)*
+
+5. «Как ты ведёшь расписание рядом с Next Actions? `1)` Calendar и NA — одна система (NA сразу попадают в Календарь) `2)` раздельно — NA в Notion, встречи в Google Calendar `3)` не использую Календарь для планирования.» Save `config.gtd.calendar_integration: "unified" | "separate" | "none"`.
+
+6. «База для **заметок / референсов** (статьи, контакты, идеи)? URL или `нет`.»
+7. «Куда ты архивируешь обработанные Inbox-записи? URL страницы-архива, или `удаляю` / `меняю статус` / `нет`.»
 
 For each provided URL: call `mcp__notion__notion-fetch` to validate access. If 403/404, reply «не вижу — поделись страницей с интеграцией (Share → Connections → cgtd) и пришли URL ещё раз». Save IDs into `config.notion.*_id`.
 
 Then probe the schemas. For each provided database, call `mcp__notion__notion-fetch` and inspect the property list:
 
-6. For the Inbox/Next Actions/Tasks DBs that exist:
+8. For the Inbox/Next Actions/Tasks DBs that exist:
    - Find the **Status** property (any property of type `status` or `select`). Send: «В `<DB>` твой статус-проперти называется `<name>` со значениями: `<list>`. Какое значение означает «не сделано / новое»? «в работе»? «сделано»? «отменено»? «отложено / someday»? Можно пропустить, если значения не подходят.»
    - Save into `config.gtd.<db>.status_field` + `status_values.{open,in_progress,done,cancelled,deferred}`.
    - Find the **Date** / **Deadline** property if present. Send: «Поле даты — `<name>`? Используется для дедлайна или для расписания?» Save.
    - Find any **priority** property (Eisenhower, P1-P4, etc.). Send: «Есть приоритеты? Поле `<name>` со значениями `<list>` — это что? Эйзенхауэр / P1-P4 / другое / не используется.» Save into `config.gtd.priority_scheme`.
 
-7. Notes DB (if present): «Какие у тебя поля в Notes — категория, тэги, источник? Перечисли.» Save into `config.gtd.notes.fields`.
+9. Notes DB (if present): «Какие у тебя поля в Notes — категория, тэги, источник? Перечисли.» Save into `config.gtd.notes.fields`.
 
-8. Free-form: «Расскажи коротко своими словами, как ты пользуешься этой системой день в день. Что ты делаешь утром? Что вечером? Как обрабатываешь Inbox? Что особенного я должен учитывать?» — save the answer verbatim into `config.gtd.user_narrative`. The morning-ritual / evening-review / process-inbox skills will read this when generating their output to align with the user's voice.
+10. Free-form: «Расскажи коротко своими словами, как ты пользуешься этой системой день в день. Что ты делаешь утром? Что вечером? Как обрабатываешь Inbox? Что особенного я должен учитывать?» — save the answer verbatim into `config.gtd.user_narrative`. The morning-ritual / evening-review / process-inbox skills will read this when generating their output to align with the user's voice.
 
 ### 6.3 — generate skill overlay
 
 Based on `config.gtd.*`, write customized SKILL.md files into `/data/skills-overlay/<name>/SKILL.md` for any skill whose default behavior needs adapting:
 
-- **process-inbox** — replace hardcoded Status values («Not started» / «Done» / «Cancelled» / «Someday/Maybe») with `config.gtd.next_actions.status_values.*`. Replace data-source IDs with `config.notion.*_id`. If user has no Tasks DB, drop the «multi-step → Tasks» branch and merge into Next Actions. If user has no Notes DB, drop the Notes branch and inline references into Inbox body.
-- **morning-ritual** — replace status filter («Status ∉ {Done, Cancelled}») with the user's terms. Replace Eisenhower references with `config.gtd.priority_scheme` (drop entirely if `none`).
+- **process-inbox** — replace hardcoded Status values («Not started» / «Done» / «Cancelled» / «Someday/Maybe») with `config.gtd.next_actions.status_values.*`. Replace data-source IDs with `config.notion.*_id`. Routing logic adapts to the user's DB structure:
+
+  | `has_projects_db` | `has_tasks_db` | Behavior |
+  |---|---|---|
+  | false | false | All multi-step work → Next Actions. Drop Tasks/Projects routing branches. |
+  | true | false | Multi-step goals → `config.notion.projects_id`. Steps tracked as NA directly. |
+  | false | true | Steps → `config.notion.tasks_id`. No Projects level — route project-like items to Tasks. |
+  | true | true | Full hierarchy: Goals → Projects, Steps → Tasks, Atomic → Next Actions. |
+
+  If a flag is `true` but the corresponding `_id` is null (URL validation failed during interview), emit a Telegram warning on first run: «Настроена база [Projects/Tasks] но ID не найден — проверь `/gtd-config`.»
+
+  For calendar: if `calendar_integration: "unified"`, dedup Next Actions against Calendar events by event_id before creating. If `"separate"`, create independently. If `"none"`, omit Calendar references.
+
+  If user has no Notes DB, drop the Notes branch and inline references into Inbox body.
+- **morning-ritual** — replace status filter («Status ∉ {Done, Cancelled}») with the user's terms. Replace Eisenhower references with `config.gtd.priority_scheme` (drop entirely if `none`). For `calendar_integration: "unified"`: present Calendar and NA as one merged schedule, deduplicate by event_id. For `"separate"`: two parallel sections (Calendar, then NA). For `"none"`: omit Calendar section.
 - **evening-review** — same status replacements.
 - **proactive-inbox** — replace status terms; if user has no Notes DB, route newsletters/references to Inbox body instead.
 - **inbox-router** — replace `notion.inbox_id` reference (already config-driven, so usually no overlay needed unless user opted out of Inbox-everything).
