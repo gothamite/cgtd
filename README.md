@@ -40,7 +40,7 @@ Steps:
 git clone https://github.com/gothamite/cgtd.git
 cd cgtd
 cp .env.example .env
-$EDITOR .env             # paste GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET
+nano .env                # or: vim .env  — paste GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET
 mkdir -p data            # prevent root-owned dir on Linux
 docker compose up -d
 ```
@@ -54,6 +54,8 @@ First time prompts `claude login` (browser OAuth). Then inside Claude:
 /init-cgtd
 ```
 This walks you through three things only: install the Telegram channel plugin, configure the bot token, pair your account. When it prints "✓ Bootstrap done" and tells you to exit — exit.
+
+> The bootstrap includes a quick MCP connectivity check. If Google or Notion MCPs aren't reachable, you'll see a warning in the terminal — fix `data/claude-home/settings.json` and run `docker compose restart` before proceeding.
 
 **3. Host shell** — start the long-running channel session:
 ```bash
