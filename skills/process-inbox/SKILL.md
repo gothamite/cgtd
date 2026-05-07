@@ -21,7 +21,7 @@ End with `ok "$RID"` or `fail "$RID" "msg"`.
 
 ## Procedure
 
-1. Query Inbox via `mcp__notion__query-data-source` (fallback: `notion-search` on `config.notion.inbox_id`).
+1. Query Inbox via `mcp__notion__query-data-source` (fallback: `mcp__notion__search` on `config.notion.inbox_id`).
 2. For each entry, extract implicit date/deadline per `/data/memory/feedback_implicit_dates.md` + `feedback_contextual_deadlines.md`.
 3. **Dedup check.** Before creating in destination, `mcp__notion__search` the target data source for the entry's title — fuzzy match (lemmatize, drop filler words). If a candidate duplicate exists AND is not Done/Cancelled:
    - Exact/near-exact match → skip create; archive the Inbox entry; mention in ⚠️ «duplicate, archived original, existing: [link]».

@@ -16,7 +16,7 @@ Persist progress to `/data/init-progress.json`:
 ```json
 {
   "section": "user" | "drive_account_explanation" | "google_oauth" |
-             "notion_oauth" | "drive_folder" | "gtd_interview" |
+             "drive_folder" | "gtd_interview" |
              "schedule" | "jobs" | "finalize" | "done",
   "section_state": { ... per-section scratch ... },
   "started_at": "<iso>",
