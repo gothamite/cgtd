@@ -69,11 +69,11 @@ This is the marker that `inbox-router` uses to know "we're between Phase 1 and P
 
 Before printing "✓ Bootstrap done", verify that both MCPs are reachable (not just not-yet-authed):
 
-1. Call `mcp__google-workspace__list_calendars` with any placeholder email (e.g. `test@example.com`).
+1. Call `mcp__google-workspace__list_calendars user_google_email=test@example.com`.
    - If it returns an OAuth URL → expected, everything is wired. Do not warn.
    - If it returns a tool-layer error (connection refused, server not found, non-200 that is not a redirect) → print in terminal: «⚠ google-workspace MCP is not responding. Check `data/claude-home/settings.json` and run `docker compose restart`.»
 
-2. Call `mcp__notion__notion-search` with an empty query `""`.
+2. Call `mcp__notion__notion-search query=""`.
    - If it returns an OAuth URL or any valid response → expected. Do not warn.
    - If it returns a tool-layer error (network failure, unreachable server) → print: «⚠ Notion MCP is not responding. Check `data/claude-home/settings.json`.»
 
