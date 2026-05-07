@@ -34,6 +34,17 @@ For each target email:
 3. Send URL. User opens on Docker host, signs in, **re-picks pages to share**.
 4. Wait for «done». Retry. On success → reply «✓ Notion reauthorized».
 
+### Если `/cgtd-reauth notion` не помогает (только с хостовой оболочки)
+
+Если после OAuth Notion MCP всё ещё возвращает ошибку авторизации, сессия MCP может зависнуть. Полный сброс запускается **из терминала на хосте** (не из Telegram):
+
+```bash
+docker compose restart assistant
+docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
+```
+
+После перезапуска отправь `/cgtd-reauth notion` из Telegram ещё раз.
+
 ## Auto-detection from skill failures
 
 When a cron skill catches `invalid_grant` / "auth required" / "401" from either MCP:
