@@ -2,7 +2,21 @@
 set -euo pipefail
 
 DATA="${CGTD_DATA_DIR:-/data}"
-mkdir -p "$DATA"/{memory,mcp/google-workspace,mcp/telegram,mcp/notion,lock,claude-home,skills-overlay}
+mkdir -p "$DATA"/{memory,mcp/google-workspace,mcp/telegram,mcp/notion,lock,claude-home,skills-overlay,cache/uv,cache/npm}
+
+# Persist uvx/uv package cache so MCP servers start fast after container restarts.
+# Without this, uvx re-downloads ~95 packages (~20 MB) each restart, hitting Claude Code's MCP init timeout.
+if [ ! -L /root/.cache/uv ]; then
+  rm -rf /root/.cache/uv
+  mkdir -p /root/.cache
+  ln -s "$DATA/cache/uv" /root/.cache/uv
+fi
+
+# Persist npm cache (used by npx for notion-mcp-server and other npm-based MCPs).
+if [ ! -L /root/.npm ]; then
+  rm -rf /root/.npm
+  ln -s "$DATA/cache/npm" /root/.npm
+fi
 
 # Persist Claude Code home (~/.claude) across container restarts.
 # Holds: claude.ai OAuth credentials, installed plugins, plugin config, MCP tokens.

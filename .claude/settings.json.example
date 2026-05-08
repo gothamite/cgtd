@@ -1,12 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash*",
-      "Read*",
-      "Write*",
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
       "mcp__google-workspace__*",
       "mcp__notion__*",
-      "mcp__plugin_telegram_telegram__*"
+      "mcp__plugin_telegram_telegram__*",
+      "Skill(*)",
+      "WebSearch(*)",
+      "WebFetch(*)"
     ]
   },
   "mcpServers": {
