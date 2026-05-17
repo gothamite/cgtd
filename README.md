@@ -8,6 +8,7 @@ Built as opinionated, ready-to-run Docker containers — one container per assis
 
 - **Inbox-everything pattern.** Send any Telegram message — text, photo, voice transcript, link — and it lands in your Notion **Inbox** by default. No commands required.
 - **Nightly inbox processing.** Classifies each Inbox entry into Next Actions, Tasks (multi-step projects), or Notes (reference). Parses implicit deadlines («до конца зимы», "by next Friday", "EOM").
+- **Nightly tasks processing.** Decomposes Tasks (multi-step projects) into atomic Next Actions, flags stalled or deadline-at-risk tasks, marks them for your approval.
 - **Morning brief (08:30).** Today's calendar, Gmail 24h actionable items, overdue Next Actions, and a proposed time-blocked plan around your weekly rhythm. Asks for your approval before scheduling.
 - **Daytime sweep (every 2h).** Scans Gmail + Calendar across all your Google accounts; routes actionable items to Notion; pings you on urgent deadlines.
 - **Evening review (21:30).** Walks through today's Next Actions, asks status, rolls unfinished items forward.
@@ -83,9 +84,11 @@ Full guide: [`docs/quickstart.md`](docs/quickstart.md).
 | `/gtd-config` or `/cgtd` | Re-run / continue the Telegram interview |
 | `/cgtd-reauth google <email>` | Re-authorize a Google account when its token expires |
 | `/cgtd-reauth notion` | Re-authorize Notion |
-| `/morning`, `/evening` | Trigger the corresponding skill on demand |
-| `/inbox` | Process the Notion Inbox now |
+| `/morning` or `/утро` | Trigger the morning brief on demand |
+| `/evening` or `/вечер` | Trigger the evening review on demand |
+| `/inbox` or `/разбери` | Process the Notion Inbox now |
 | `/status` | Show last-ok timestamps for each cron job |
+| `/cgtd-timezone <tz>` | Change the container timezone (e.g. `Europe/Berlin`) |
 
 Plain Telegram messages (no `/`) drop into your Notion Inbox.
 
@@ -102,7 +105,7 @@ Each container is its own assistant — own Telegram bot, own Google tokens, own
 - Docker (Desktop on macOS/Windows, Engine on Linux)
 - A claude.ai account (Telegram channel plugin requires it; API keys do not work for channels — research preview limitation)
 - A Google Cloud project (yours — 5 min; see [`docs/google-setup.md`](docs/google-setup.md))
-- A Notion account (no token needed; OAuth happens during the Telegram interview)
+- A Notion account + Internal Integration Token (see [`docs/notion-setup.md`](docs/notion-setup.md) — 5 min)
 - A Telegram bot (5 min via BotFather; see [`docs/telegram-setup.md`](docs/telegram-setup.md))
 
 ## Architecture
