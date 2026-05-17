@@ -19,6 +19,19 @@ RID=$(/app/bin/cron-log.sh start morning-ritual)
 ```
 End with `ok "$RID"` or `fail "$RID" "msg"`.
 
+## MCP guard
+
+Before any API call, attempt `mcp__google-workspace__list_calendars user_google_email=<config.google.accounts[0]>`.
+
+- If the tool returns a **tool-not-found / not-available error** (MCP server not loaded in this session):
+  1. Try `mcp__plugin_telegram_telegram__reply chat_id=<config.telegram.chat_id>` with:
+     > ⚠️ Утренний бриф не запустился: MCP-серверы не загрузились. Запусти channel-сессию:
+     > ```
+     > docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
+     > ```
+  2. `cron-log.sh fail "$RID" "mcp_unavailable: start channel session"`. Exit.
+- Auth error (OAuth URL in response) → continue; handled in Failure modes.
+
 ## Message structure
 
 1. **Overdue NA sweep.** Enumerate ALL Next Actions with `Date < today` AND Status ∉ {Done, Cancelled}. No keyword shortcuts. Dedicated section.
@@ -26,8 +39,12 @@ End with `ok "$RID"` or `fail "$RID" "msg"`.
    - Calendar events today across all `config.google.accounts[]`.
    - NA with `Date.start = today` (any `is_datetime`). User already scheduled them.
 3. **Gmail 24h.** Skip promo/social, only actionable/decision items. Cross-account.
-4. **TODAY PLAN with time blocks.** Fill around anchors per `config.schedule.weekday_blocks` (or weekend rule on Sat/Sun). Propose slots with NA tokens for approval. Do NOT re-slot anchored NA. Write approved items via `mcp__notion__update-a-page` only after user confirms.
+4. **TODAY PLAN with time blocks.** Fill around anchors per `config.schedule.weekday_blocks` (or weekend rule on Sat/Sun). Propose slots with NA tokens for approval. Do NOT re-slot anchored NA. Write approved items via `mcp__notion__notion-update-page` only after user confirms.
 5. **Free-slot reserve.** Pull from NA with `Status=Someday/Maybe AND no Date`, prioritized by Eisenhower (Q1→Q2→Q3→Q4).
+
+   **Weekend day rule:**
+   - **Saturday** → propose only leisure/hobby items from Someday/Maybe. Household errands, admin tasks (cleaning, repairs, settings, buying supplies) are NOT proposed on Saturday.
+   - **Sunday** → household and admin tasks only (cleaning, repairs, configuration, buying supplies). Leisure/hobby items are deprioritized.
 6. **Closing line** in `config.user.locale`. Examples: en «day mapped, let's go», ru «поехали, день размечен», de «Tagesplan steht».
 
 ## Awaiting user approval
@@ -36,7 +53,7 @@ Write a JSON line to `/data/pending-reviews.jsonl`:
 ```
 {"cron_id":"morning-ritual","ts":"<iso>","items":[{"na_id":"...","title":"...","start":"...","end":"..."}]}
 ```
-TTL 6h. When the user replies in Telegram («1, 3 ok; 2 перенести»), the inbox-router skill matches against this entry, applies via `update-a-page`, removes the entry. On SessionStart catch-up, entries older than TTL are dropped silently.
+TTL 6h. When the user replies in Telegram («1, 3 ok; 2 перенести»), the inbox-router skill matches against this entry, applies via `notion-update-page`, removes the entry. On SessionStart catch-up, entries older than TTL are dropped silently.
 
 ## Slotting
 

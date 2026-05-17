@@ -86,12 +86,12 @@ Do NOT route unknown commands to Inbox.
    - `feedback_implicit_dates.md` — parse «до конца зимы», "by next Friday", etc.
    - `feedback_contextual_deadlines.md` — infer deadlines from context.
    - `feedback_default_inbox.md` — when in doubt, drop without asking.
-5. Create a Notion row in `config.notion.inbox_id` via `mcp__notion__create-a-page`. Title = first 80 chars; body = full text + Drive link if any.
-6. React with `👍` via `mcp__plugin_telegram_telegram__react`. No reply text.
+5. Create a Notion row in `config.notion.inbox_id` via `mcp__notion__notion-create-pages`. Title = first 80 chars; body = full text + Drive link if any.
+6. React with `📥` via `mcp__plugin_telegram_telegram__react`. No reply text.
 
 ## Replies to pending reviews
 
-If the message looks like a reply to an entry in `/data/pending-reviews.jsonl` (e.g. "1 done, 2 перенести"), match against the most recent unresolved entry, apply via `mcp__notion__update-a-page`, update the file. See `morning-ritual` and `evening-review` SKILL.md for protocol.
+If the message looks like a reply to an entry in `/data/pending-reviews.jsonl` (e.g. "1 done, 2 перенести"), match against the most recent unresolved entry, apply via `mcp__notion__notion-update-page`, update the file. See `morning-ritual` and `evening-review` SKILL.md for protocol.
 
 ## Failure modes
 

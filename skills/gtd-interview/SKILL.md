@@ -66,7 +66,7 @@ After the loop: confirm the primary («Основной = `<first email>`. Ме�
 
 ## Section 4 — Notion API key
 
-1. Call `mcp__notion__search` with `query=""`.
+1. Call `mcp__notion__notion-search` with `query=""`.
    - If it returns valid results or an empty list → key already configured (came from `.env`). Advance `init-progress.json` `section` to `"drive_folder"` and continue to Section 5 (Drive folder).
    - If it returns an error (MCP not connected / key missing) → proceed to step 2.
 
@@ -89,7 +89,7 @@ After the loop: confirm the primary («Основной = `<first email>`. Ме�
    > ```
    > После перезапуска напиши `/gtd-config` — продолжим с настройки баз данных Notion.
 
-5. On next `/gtd-config` invocation: state machine loads `section = "drive_folder"` and resumes there. At the top of the `drive_folder` handler, call `mcp__notion__search` with `query=""` to verify connectivity. If it fails, tell the user the key isn't working and prompt them to check `.env` / restart again. If it succeeds, proceed normally.
+5. On next `/gtd-config` invocation: state machine loads `section = "drive_folder"` and resumes there. At the top of the `drive_folder` handler, call `mcp__notion__notion-search` with `query=""` to verify connectivity. If it fails, tell the user the key isn't working and prompt them to check `.env` / restart again. If it succeeds, proceed normally.
 
 ## Section 5 — Drive folder
 
@@ -117,7 +117,7 @@ Ask: «У тебя уже настроена GTD-система в Notion (Inbox
 
 If yes:
 - Ask the user for the URL of any Notion page where the GTD parent should live (or just «создать на верхнем уровне workspace»).
-- Call `mcp__notion__create-a-page` to create:
+- Call `mcp__notion__notion-create-pages` to create:
   - Parent page «🗂 GTD»
   - Inside it: 4 databases (Inbox, Next Actions, Tasks, Notes) with the schemas from the OLD `notion-setup.md` (Inbox: Name/Source/Created/URL; Next Actions: Name/Status/Date/Project/Eisenhower; Tasks: Name/Status/Deadline; Notes: Name/Category/Tags/Source/URL)
   - One page «📦 Inbox Archive»

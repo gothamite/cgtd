@@ -37,13 +37,16 @@
       "cron_weekday": "13 8-20/2 * * 1-5",
       "cron_weekend": "13 8,21 * * 0,6"
     },
-    "morning_ritual":  { "enabled": true, "cron": "30 8 * * *" },
+    "morning_ritual":  { "enabled": true, "cron_weekday": "30 8 * * 1-5", "cron_weekend": "30 9 * * 0,6" },
     "evening_review":  { "enabled": true, "cron": "28 21 * * *" },
-    "process_inbox":   { "enabled": true, "cron": "57 20 * * *" },
+    "process_inbox":   { "enabled": true, "cron": "15 21 * * *" },
+    "tasks_processing": { "enabled": true, "cron": "45 21 * * *" },
     "cron_ids": {
-      "morning_ritual": null,
+      "morning_ritual_weekday": null,
+      "morning_ritual_weekend": null,
       "evening_review": null,
       "process_inbox": null,
+      "tasks_processing": null,
       "proactive_inbox_weekday": null,
       "proactive_inbox_weekend": null
     }

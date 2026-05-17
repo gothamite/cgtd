@@ -28,6 +28,19 @@ Before fetching Gmail, load the seen-ID sets from `/data/email-watermarks.json`:
 - If the file is absent or cannot be parsed (malformed JSON): treat all accounts as having no watermark (first-run fallback). Continue without aborting.
 - For each account, extract its list of seen IDs (default empty list if key absent). Store in memory as `watermark[email]`.
 
+## MCP guard
+
+Before any API call, attempt `mcp__google-workspace__list_calendars user_google_email=<config.google.accounts[0]>`.
+
+- If the tool returns a **tool-not-found / not-available error** (i.e. the MCP server is not loaded in this session — distinct from an auth error or API error):
+  1. Try `mcp__plugin_telegram_telegram__reply chat_id=<config.telegram.chat_id>` with:
+     > ⚠️ Кроны не работают: MCP-серверы не загрузились в этой сессии. Запусти channel-сессию:
+     > ```
+     > docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
+     > ```
+  2. `cron-log.sh fail "$RID" "mcp_unavailable: start channel session"`. Exit.
+- Auth error (OAuth URL in response) → continue normally; auth failures are handled per-account below.
+
 ## Sources (per account in `config.google.accounts[]`)
 
 For each `email` in `accounts`:
@@ -41,15 +54,16 @@ For each `email` in `accounts`:
 
 Merge across accounts. Dedupe by `message_id` (Gmail) and `event_id` (Calendar). Tag the source account in Telegram output **only when ambiguous** (same title from two accounts).
 
-Also fetch Notion Next Actions + Inbox via `mcp__notion__search` — for dedup only.
+Also fetch Notion Next Actions + Inbox via `mcp__notion__notion-search` — for dedup only.
 
 ## Gmail classification
 
 1. Actionable from human / deadline / invoice with due / meeting RSVP → **Next Actions** with Date.
-2. Booking/ticket/confirmation with concrete date (cinema, concert, hotel, flight, restaurant) → **Next Actions** with Date. Hotels/trips: `Date.start` + `Date.end`.
-3. Booking without action date → **Inbox**.
-4. Transactional without action (statements, receipts, subscriptions) → ignore.
-5. Newsletters → ignore unless deadline-bound (see Promo deadline scan).
+2. Booking/ticket/confirmation (cinema, concert, hotel, flight, restaurant, EVENTIM, etc.) → always fetch full email body first: `get_gmail_message_content format="full"`. Parse date **and** venue/location from the body.
+   - Date found → **Next Actions** with `Date.start` (+ `Date.end` for hotels/trips or multi-day events).
+   - Date not found after reading full body → **Inbox** with note «дата не найдена — уточнить». Never route to Notes.
+3. Transactional without action (statements, receipts, subscriptions) → ignore.
+4. Newsletters → ignore unless deadline-bound (see Promo deadline scan).
 
 ### Promo deadline scan
 
@@ -79,7 +93,16 @@ If signal present and item not in NA/Inbox → create.
 
 ### Date parsing
 
-Apply `/data/memory/feedback_implicit_dates.md` + `feedback_contextual_deadlines.md`. Ambiguous phrases ("soon", "asap" without time) → Inbox + flag in ⚠️.
+**Status–Date invariant.** A page with Status=`Not started` MUST have a Date. Apply this 5-step inference chain before deciding on status:
+1. Implicit phrases in text (per `feedback_implicit_dates.md`).
+2. Contextual heuristics (per `feedback_contextual_deadlines.md`): daily-use repair 1–2 weeks, seasonal 3–4 weeks, health/admin 2 weeks, gifts = event date − buffer, package/storage pickup = email date + pickup window − 1 day, marketplace reply (Kleinanzeigen, eBay) = 1–2 days.
+3. Full body read: if not done yet for this email, call `get_gmail_message_content format="full"` and re-parse.
+4. Cross-Notion lookup: if the action is tied to a named event, search NA+Tasks by event title → subtract domain lead time (transport tickets −1–2 months, accommodation −2–3 months, gift −1–2 weeks, outfit −1 week).
+5. If date still unknown → **Inbox** with note «дата не найдена — уточнить». Never to `Someday/Maybe`.
+
+`Someday/Maybe` is the ONLY status that may have no Date.
+
+Ambiguous phrases ("soon", "asap" without time) → Inbox + flag in ⚠️.
 
 ## Calendar
 
@@ -104,7 +127,7 @@ Do NOT use `"Date": "YYYY-MM-DD"` — this causes a validation error.
 
 ## Dedup
 
-`mcp__notion__search` by subject/thread_id with `data_source_url` before create.
+`mcp__notion__notion-search` by subject/thread_id with `data_source_url` before create.
 
 ## Output (one Telegram message via `mcp__plugin_telegram_telegram__reply` to `config.telegram.chat_id`)
 

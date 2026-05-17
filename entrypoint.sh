@@ -48,6 +48,11 @@ if [ ! -f "$DATA/claude-home/settings.json" ]; then
   cp /app/.claude/settings.json.example "$DATA/claude-home/settings.json"
 fi
 
+# Seed CLAUDE.md (session startup instructions) if absent.
+if [ ! -f "$DATA/claude-home/CLAUDE.md" ]; then
+  cp /app/.claude/CLAUDE.md "$DATA/claude-home/CLAUDE.md"
+fi
+
 # Seed default memory on first run
 if [ ! -f "$DATA/memory/MEMORY.md" ]; then
   cp -r /app/memory/. "$DATA/memory/"

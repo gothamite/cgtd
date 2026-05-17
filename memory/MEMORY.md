@@ -1,5 +1,9 @@
 - [Default drop-to-Inbox behavior](feedback_default_inbox.md) — unclassified messages go straight to Notion Inbox, no question asked
 - [Implicit date parsing](feedback_implicit_dates.md) — phrases like "by end of winter", "до конца зимы", "EOQ" are real deadlines, parse before routing
-- [Contextual deadline inference](feedback_contextual_deadlines.md) — don't default to Someday/Maybe; reason from date, season, weather, use-case
+- [Contextual deadline inference](feedback_contextual_deadlines.md) — Status–Date invariant, heuristics by use-case, cross-Notion event lookup with lead-time table
 - [Honesty over false confidence](feedback_honesty_over_confidence.md) — say "I don't know" when sources are weak; don't bluff plausible-sounding answers
 - [Never fabricate URLs](feedback_no_fabricated_urls.md) — copy URLs verbatim from tool results; don't reconstruct page IDs from memory
+- [Inbox capture behavior](feedback_inbox_capture.md) — capture bucket: save verbatim, no questions, handle attachments by size/MIME (lh3 CDN for images)
+- [Check before asking](feedback_check_before_asking.md) — always look up Notion/Gmail/Calendar before asking the user a question
+- [Telegram reply format](feedback_telegram_reply.md) — all responses via reply tool, format="markdownv2", escape special chars
+- [Weekend schedule preference](user_weekend_schedule.md) — Saturday = leisure only; Sunday = household/admin

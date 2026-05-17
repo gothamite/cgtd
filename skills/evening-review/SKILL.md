@@ -19,6 +19,19 @@ RID=$(/app/bin/cron-log.sh start evening-review)
 ```
 End with `ok "$RID"` or `fail "$RID" "msg"`.
 
+## MCP guard
+
+Before any API call, attempt `mcp__google-workspace__list_calendars user_google_email=<config.google.accounts[0]>`.
+
+- If the tool returns a **tool-not-found / not-available error** (MCP server not loaded in this session):
+  1. Try `mcp__plugin_telegram_telegram__reply chat_id=<config.telegram.chat_id>` with:
+     > ⚠️ Вечерний обзор не запустился: MCP-серверы не загрузились. Запусти channel-сессию:
+     > ```
+     > docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
+     > ```
+  2. `cron-log.sh fail "$RID" "mcp_unavailable: start channel session"`. Exit.
+- Auth error (OAuth URL in response) → continue; handled in Failure modes.
+
 ## Message structure
 
 1. **TODAY REVIEW.** Next Actions with `Date=today` where Status ≠ Done/Cancelled. List each (with NA id), ask «What about X? — Done / Move to tomorrow / Cancel / Continue tomorrow». Skip section if all closed.
@@ -29,7 +42,7 @@ Silent if everything is empty.
 
 ## Fetching today's NA
 
-`search` cannot filter by Date field. Use `search` with query = today's ISO date (e.g. `"2026-04-26"`) against `config.notion.next_actions_id` — semantic search reliably surfaces entries with Date=today. Do NOT rely on `created_date`.
+`notion-search` cannot filter by Date field. Use `notion-search` with query = today's ISO date (e.g. `"2026-04-26"`) against `config.notion.next_actions_id` — semantic search reliably surfaces entries with Date=today. Do NOT rely on `created_date`.
 
 ## Awaiting user decisions
 
@@ -38,7 +51,7 @@ Persist proposal to `/data/pending-reviews.jsonl`:
 {"cron_id":"evening-review","ts":"<iso>","items":[{"na_id":"...","title":"...","date":"today"}]}
 ```
 
-When user replies in Telegram, inbox-router matches against the most recent `evening-review` entry whose items aren't all resolved, applies via `update-a-page`, removes the entry.
+When user replies in Telegram, inbox-router matches against the most recent `evening-review` entry whose items aren't all resolved, applies via `notion-update-page`, removes the entry.
 
 TTL 12h. On SessionStart catch-up, items not acted on get the default action: **«move to tomorrow»** (shift Date +1, keep status), silently.
 
