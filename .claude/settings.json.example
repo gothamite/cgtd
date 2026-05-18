@@ -22,6 +22,7 @@
         "GOOGLE_OAUTH_CLIENT_ID": "${GOOGLE_OAUTH_CLIENT_ID}",
         "GOOGLE_OAUTH_CLIENT_SECRET": "${GOOGLE_OAUTH_CLIENT_SECRET}",
         "WORKSPACE_MCP_DATA_DIR": "/data/mcp/google-workspace",
+        "WORKSPACE_MCP_CREDENTIALS_DIR": "/data/mcp/google-workspace/credentials",
         "OAUTHLIB_INSECURE_TRANSPORT": "1"
       }
     },

@@ -16,3 +16,21 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
+
+  liu:
+    build: .
+    image: cgtd
+    container_name: cgtd-liu
+    env_file: .env.liu
+    environment:
+      - TZ=Europe/Berlin
+      - ALLOWED_FILE_DIRS=/root/.claude/channels/telegram/inbox:/root/.workspace-mcp/attachments
+      - CGTD_DATA_DIR=/data
+      - NOTION_API_KEY=${NOTION_API_KEY:-}
+    volumes:
+      - ./data-liu:/data
+    ports:
+      - "127.0.0.1:8001:8000"   # OAuth callback; separate port to avoid conflict
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
