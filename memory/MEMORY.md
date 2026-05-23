@@ -7,3 +7,18 @@
 - [Check before asking](feedback_check_before_asking.md) — always look up Notion/Gmail/Calendar before asking the user a question
 - [Telegram reply format](feedback_telegram_reply.md) — all responses via reply tool, format="markdownv2", escape special chars
 - [Weekend schedule preference](user_weekend_schedule.md) — Saturday = leisure only; Sunday = household/admin
+- [Notion reauth procedure](feedback_notion_reauth.md) — how to fix Notion MCP 401 errors; what works and what doesn't
+- [Cron sessions have no MCP tools](feedback_cron_no_mcp.md) — use Google API + Notion REST directly in cron context; fallback immediately if ToolSearch shows no google-workspace tools
+- [Startup cron check first](feedback_startup_crons.md) — CronList + recreate missing crons BEFORE handling any first message
+- [NA is a time-blocked calendar](feedback_na_time_blocks.md) — NA with fixed start+end = anchor, immovable; build agenda around anchors
+- [Someday slotting](feedback_someday_slotting.md) — slot Someday/Maybe into free blocks with Eisenhower priority; never just list as suggestions
+- [Notion token location](feedback_notion_token_location.md) — use $NOTION_API_KEY env var; check env before asking user for token
+- [NA creation threshold](feedback_na_creation_threshold.md) — don't create NAs for support replies or shipping updates without hard deadlines
+- [No anchor word in messages](feedback_no_anchor_word.md) — "якоря" is internal only, never write it in Telegram output
+- [MCP disconnect after context overflow](feedback_mcp_after_context_overflow.md) — google-workspace MCP unavailable after session continuation; user must restart to reauth
+- [Google credentials in env](feedback_google_credentials_in_env.md) — GOOGLE_OAUTH_CLIENT_ID/SECRET always in env; try ToolSearch for gmail/calendar tools first
+- [Evening review order](feedback_evening_review_order.md) — process-inbox → tasks-processing must both finish before evening-review
+- [Tasks Inbox processing](feedback_tasks_inbox_processing.md) — Inbox-status tasks must be decomposed into NAs + moved to Approval required by tasks-processing (Part A)
+- [Reminders as NA](feedback_reminders_as_na.md) — always create GCal popup event + Notion NA when user asks for a reminder
+- [Forwarded messages](feedback_forwarded_messages.md) — treat forwarded Telegram messages same as direct messages; process attachments too
+- [Task vs NA rule](feedback_task_vs_na.md) — single action → NA directly; Task requires minimum 2 NAs; decomposition patterns inside

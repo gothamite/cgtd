@@ -27,6 +27,13 @@ fi
 
 mkdir -p /root/.claude
 
+# Seed default memory into Claude's project memory path on first run.
+# /root/.claude/projects/-app/memory/ is what Claude Code reads as auto-memory for the /app project.
+mkdir -p /root/.claude/projects/-app/memory
+if [ ! -f /root/.claude/projects/-app/memory/MEMORY.md ]; then
+  cp -r /app/memory/. /root/.claude/projects/-app/memory/
+fi
+
 # Skill resolution: per-skill overlay-first, baked-second.
 # /app/skills/    — read-only templates shipped with the image
 # /data/skills-overlay/ — user-customized SKILL.md files written by gtd-interview

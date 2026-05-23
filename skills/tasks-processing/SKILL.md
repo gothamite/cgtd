@@ -50,6 +50,9 @@ If result is empty or timestamp is before today's date in `config.user.timezone`
    - No Date/time — scheduling happens after user approval
    - Status: `Not started`
    - Priority: inherit from task (use the inferred value from step b)
+   - For decomposition patterns («X + Y», lists, «разобраться с...», research→action chains), apply `/data/memory/feedback_task_vs_na.md`.
+
+   **Minimum NAs rule:** If decomposition yields only 1 NA → the Task wrapper is unnecessary. Create that NA as standalone (no Task relation), set the Task Status → `Done` (or delete via Notion REST API). Do not leave a Task with a single linked NA.
 
    **d. Create each NA** via `mcp__notion__notion-create-pages` in `config.notion.next_actions_id`:
    - `Name`: NA title

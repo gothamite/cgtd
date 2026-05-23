@@ -53,6 +53,8 @@ Before any API call, attempt `mcp__notion__notion-search query=""`.
    - **(a') atomic without time signal** → Next Actions, Status=`Someday/Maybe`. Apply contextual inference first: daily-use repair 1–2 weeks, seasonal clothing 3–4 weeks before peak, health/admin 2 weeks, gifts = event date − buffer, pure-want → Someday/Maybe.
    - **(a'') booking/ticket/event without explicit date** → before routing, search the originating Gmail message body (if source is known) for the date: call `get_gmail_message_content format="full"` on the source thread. If date found → rule (a) with Date. If still not found → ⚠️ Clarify with note «дата не найдена — уточнить». Never route to Notes.
    - **(b) multi-step / project** (several verbs, "проект", "organize", "prepare for X") → `config.notion.tasks_id`, subtasks in body, deadline if present.
+
+   **Task vs NA rule (apply before routing to Tasks):** Count the number of distinct atomic actions. If exactly 1 → classify as NA (rule a or a'), never create a Task. Only route to Tasks if ≥ 2 concrete NAs can be identified immediately. For decomposition patterns («X + Y», lists, «разобраться с...», research→action chains), apply `/data/memory/feedback_task_vs_na.md`.
    - **(c) informational** (reference, link, quote, idea, contact, recipe, article, fact — no event, no action) → `config.notion.notes_id` with Category + 2–4 Tags + URL, Source=Telegram.
    - Create destination via `mcp__notion__notion-create-pages`.
 5. After creating destination → trash the Inbox entry: PATCH `/pages/{id}` with `{"in_trash": true}` (Notion trash — 30-day recovery buffer). Do NOT move to an archive page.

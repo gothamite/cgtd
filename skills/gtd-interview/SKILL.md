@@ -34,11 +34,28 @@ On every inbound message, load progress, dispatch to the current section's handl
 
 ## Section 1 — user
 
-Three messages, one question each, wait for reply between:
+Four messages, one question each, wait for reply between:
 
 1. «Какой язык использовать для всех ответов и сводок? `en` / `ru` / `de`. По умолчанию `en`.» / «What language should I use? en / ru / de.» — save `config.user.locale`.
 2. «Как тебя называть? Имя — этого хватит.» / «What should I call you? First name is enough.» — save `config.user.name`.
 3. «Часовой пояс? Я предполагаю `<auto-detect from /etc/timezone or TZ>`. Подтверди или пришли свой (формат `Europe/Berlin`).» — save `config.user.timezone`.
+4. «Хочешь задать боту персонаж/характер для общения? Например: строгий помощник, дружелюбный ассистент, краткий и деловой, или придумай свой. Пришли описание в свободной форме — или напиши `нет`, чтобы оставить нейтральный тон.» / «Want to give the assistant a personality? Describe it freely (e.g. "friendly", "blunt and concise", "a sarcastic hacker") or say `no` for neutral.»
+
+   If user says «нет» / «no» / «skip» / equivalent → do nothing, no file created.
+   Otherwise → save the user's description verbatim into `/data/claude-home/projects/-app/memory/user_persona.md` with this structure:
+   ```markdown
+   ---
+   name: user-persona
+   description: "Custom assistant persona defined during setup"
+   metadata:
+     type: user
+   ---
+   <user's description verbatim>
+
+   **How to apply:** Use this tone and character in all Telegram replies. Don't let the persona override accuracy on important tasks — accuracy first, style second.
+   ```
+   Also append to `/data/claude-home/projects/-app/memory/MEMORY.md`:
+   `- [Assistant persona](user_persona.md) — <one-line summary of the persona>`
 
 From this point on, all assistant messages use `config.user.locale`.
 
