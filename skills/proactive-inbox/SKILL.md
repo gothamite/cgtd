@@ -19,15 +19,6 @@ RID=$(/app/bin/cron-log.sh start proactive-inbox)
 ```
 End with `ok "$RID"` or `fail "$RID" "msg"`.
 
-## Email watermark
-
-Before fetching Gmail, load the seen-ID sets from `/data/email-watermarks.json`:
-
-    {"email@gmail.com": ["msg_id_1", "msg_id_2"]}
-
-- If the file is absent or cannot be parsed (malformed JSON): treat all accounts as having no watermark (first-run fallback). Continue without aborting.
-- For each account, extract its list of seen IDs (default empty list if key absent). Store in memory as `watermark[email]`.
-
 ## MCP guard
 
 Before any API call, attempt `mcp__google-workspace__list_calendars user_google_email=<config.google.accounts[0]>`.
@@ -45,11 +36,8 @@ Before any API call, attempt `mcp__google-workspace__list_calendars user_google_
 
 For each `email` in `accounts`:
 
-- **Gmail primary (two-step fetch):**
-  1. **Header scan**: `mcp__google-workspace__search_gmail_messages user_google_email=<email>` with `query="newer_than:24h -category:promotions -category:social"`. This returns message IDs, subjects, senders, and dates — enough to classify.
-  - After the header scan: filter out any message whose ID is already in `watermark[email]`. Only pass the remaining (unseen) messages to step 2 (full content fetch) and to classification.
-  2. **Full content fetch**: call `mcp__google-workspace__get_gmail_message_content` (or `get_gmail_messages_content_batch`) with `format: "full"` **only** for messages classified as potentially actionable from step 1. Fetch in batches of **max 10** messages per call.
-- **Gmail promo sweep**: `mcp__google-workspace__search_gmail_messages user_google_email=<email>` with `query="newer_than:24h category:promotions"`. Header scan only; fetch full content only for promos that pass the deadline keyword check.
+- Gmail primary: `mcp__google-workspace__search_gmail_messages user_google_email=<email>` with `query="newer_than:24h -category:promotions -category:social"`. Includes read mail.
+- Gmail promo sweep: same tool, `query="newer_than:24h category:promotions"`. See "Promo deadline scan" below.
 - Calendar today + 2 days: `mcp__google-workspace__get_events user_google_email=<email>`.
 
 Merge across accounts. Dedupe by `message_id` (Gmail) and `event_id` (Calendar). Tag the source account in Telegram output **only when ambiguous** (same title from two accounts).
@@ -59,9 +47,9 @@ Also fetch Notion Next Actions + Inbox via `mcp__notion__notion-search` — for 
 ## Gmail classification
 
 1. Actionable from human / deadline / invoice with due / meeting RSVP → **Next Actions** with Date.
-2. Booking/ticket/confirmation (cinema, concert, hotel, flight, restaurant, EVENTIM, etc.) → always fetch full email body first: `get_gmail_message_content format="full"`. Parse date **and** venue/location from the body.
-   - Date found → **Next Actions** with `Date.start` (+ `Date.end` for hotels/trips or multi-day events).
-   - Date not found after reading full body → **Inbox** with note «дата не найдена — уточнить». Never route to Notes.
+2. Booking/ticket/confirmation (cinema, concert, hotel, flight, train, restaurant) → always fetch the **full email body** (`format="full"`), not just metadata. EVENTIM and similar ticketing services always include date, time, and venue in the body even when absent from the subject line. Parse date + venue from body, then:
+   - Concrete date found → **Next Actions** with Date. Always use `Date.start` + `Date.end` when time is known. Derive end time: flight = departure + arrival, train = same, cinema/concert = start + runtime/end time, restaurant = reservation + ~1.5h if no end given, hotel = check-in + check-out. Only `Date` alone when no time at all.
+   - No date found after reading full body → **Inbox** with note «дата не найдена — уточнить». Never route to Notes.
 3. Transactional without action (statements, receipts, subscriptions) → ignore.
 4. Newsletters → ignore unless deadline-bound (see Promo deadline scan).
 
@@ -134,19 +122,6 @@ Do NOT use `"Date": "YYYY-MM-DD"` — this causes a validation error.
 - Silent if nothing added and nothing urgent.
 - One summary «➕ N в Next Actions, M в Inbox» with titles/dates/links.
 - Separate 🚨 message for urgent items: what / when / source.
-
-## Watermark write (per account, after processing)
-
-After processing each account's messages:
-
-1. Collect **all message IDs returned by `search_gmail_messages`** for this account in this run — including those skipped as duplicates. These are the IDs from the header scan, not just actionable ones.
-2. Write to `/data/email-watermarks.json`:
-   - Read the current file (or start with `{}`).
-   - Set `watermarks[account_email]` to the list of all IDs from this run.
-   - Write the full dict back. Do not touch other accounts' keys.
-3. If no messages were found for an account, write `[]` for that account's key (clears stale IDs from the previous run).
-4. If the account returned an auth or network error, skip watermark update for that account (preserve its existing key).
-5. If the watermarks file was unreadable on load (parse error): overwrite it cleanly with the data from this run.
 
 ## Failure modes
 

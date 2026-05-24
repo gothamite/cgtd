@@ -22,3 +22,12 @@
 - [Reminders as NA](feedback_reminders_as_na.md) — always create GCal popup event + Notion NA when user asks for a reminder
 - [Forwarded messages](feedback_forwarded_messages.md) — treat forwarded Telegram messages same as direct messages; process attachments too
 - [Task vs NA rule](feedback_task_vs_na.md) — single action → NA directly; Task requires minimum 2 NAs; decomposition patterns inside
+- [Slot only future times](feedback_morning_slots_time.md) — check user timezone first; never propose slots that have already passed
+- [Schedule conflict detection](feedback_schedule_conflicts.md) — detect and resolve overlapping NA time slots before presenting the plan; never show conflicts silently
+- [NA requires datetime](feedback_na_requires_datetime.md) — NA must have date+time (not Someday/Maybe); task only leaves Approval required when all NAs have datetimes
+- [Human needs in planning](feedback_human_needs_planning.md) — always reserve lunch + rest breaks; flag overloaded days instead of silently accepting them
+- [User: Lunch schedule](user_lunch_schedule.md) — home ~14:30–15:00; work ~12:20–13:00
+- [Async task planning](feedback_async_tasks_planning.md) — split laundry/3D printing/cooking into launch+wait+finish; fill wait window with other NAs; track in background-tasks.json
+- [Implicit approval](feedback_implicit_approval.md) — "Отлично/Хорошо/Ок" after a plan = approval; always resolve pending actions, don't drop them
+- [Calendar↔NA sync](feedback_calendar_na_sync.md) — Google Calendar events and Notion NAs for the same event must always be in sync; update both on any reschedule
+- [Calendar reschedule ask time](feedback_calendar_reschedule_ask_time.md) — when moving a timed Calendar event, always ask for the new time first; never silently make it all-day

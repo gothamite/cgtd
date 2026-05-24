@@ -70,6 +70,11 @@ if [ ! -f "$DATA/install_id" ]; then
   head -c 4 /dev/urandom | xxd -p > "$DATA/install_id"
 fi
 
+# Initialize background-tasks.json if absent (tracks async NA tasks like laundry, 3D printing)
+if [ ! -f "$DATA/background-tasks.json" ]; then
+  echo "[]" > "$DATA/background-tasks.json"
+fi
+
 # Warn if container TZ doesn't match config.user.timezone
 if [ -f "$DATA/config.json" ]; then
   cfg_tz=$(jq -r '.user.timezone // empty' "$DATA/config.json" 2>/dev/null)

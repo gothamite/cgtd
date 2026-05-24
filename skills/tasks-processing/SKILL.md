@@ -66,7 +66,21 @@ If result is empty or timestamp is before today's date in `config.user.timezone`
 
 ### Part B — Check active tasks
 
-5. Query Tasks DB for Status in ["Not Started", "Next to Come", "Maybe", "In Progress", "Waiting"]. Skip "Approval required" (will be handled in morning/evening review).
+**Step 1 — Graduation from "Approval required".**
+
+Query Tasks DB for Status = "Approval required". For each such task:
+1. Fetch all linked NAs from the `Next Actions` relation field.
+2. Check: does every linked NA satisfy both conditions?
+   - `Date` field is set AND the value is a datetime (not date-only) → `is_datetime = true`
+   - Status ≠ "Someday/Maybe"
+3. If ALL NAs satisfy both conditions → task is approved. Compute new status:
+   - Due date < today OR Due ≤ today + 3 days → "Not Started"
+   - Due ≤ today + 14 days → "Next to Come"
+   - No Due OR Due > today + 14 days → "Maybe"
+   PATCH task Status to computed value. Remove task from `/data/tasks-pending.json`.
+4. If ANY NA lacks a datetime or is Someday/Maybe → leave task in "Approval required". Leave it in `tasks-pending.json`.
+
+5. Query Tasks DB for Status in ["Not Started", "Next to Come", "Maybe", "In Progress", "Waiting"].
 6. For each task, resolve linked NAs from the `Next Actions` relation field.
 7. Flag task if ANY condition is met:
    - **no_nas**: Status is "Not Started" or "In Progress" AND no linked NAs AND task created > 3 days ago

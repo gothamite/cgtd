@@ -90,12 +90,14 @@ After the loop: confirm the primary («Основной = `<first email>`. Ме�
 2. Send Telegram message:
    > Нужен Notion Internal Integration Token:
    > 1. Открой notion.so → Settings → Connections → Develop or manage integrations → New integration
-   > 2. Type: **Internal**. Название — любое (например `cgtd`).
+   > 2. Type: **Internal**. Назови как хочешь (например `cgtd` или своё имя).
    > 3. Скопируй **Internal Integration Token** (начинается с `ntn_` или `secret_`) и пришли сюда.
+   > 4. Запомни, как назвал интеграцию — оно понадобится при настройке баз Notion.
 
 3. When user sends the token:
    - Validate format: must start with `ntn_` or `secret_`. If invalid, ask again.
    - Save to `config_draft.notion.api_key` and write to `/data/config.json`.
+   - Ask: «Как ты назвал интеграцию?» Save the name to `config_draft.notion.integration_name`.
    - Advance `init-progress.json` `section` to `"drive_folder"`.
 
 4. Reply:
@@ -158,7 +160,7 @@ Ask, one question per Telegram message, waiting for reply:
 6. «База для **заметок / референсов** (статьи, контакты, идеи)? URL или `нет`.»
 7. «Куда ты архивируешь обработанные Inbox-записи? URL страницы-архива, или `удаляю` / `меняю статус` / `нет`.»
 
-For each provided URL: call `mcp__notion__retrieve-a-page` to validate access. If 403/404, reply «не вижу — поделись страницей с интеграцией (Share → Connections → cgtd) и пришли URL ещё раз». Save IDs into `config.notion.*_id`.
+For each provided URL: call `mcp__notion__retrieve-a-page` to validate access. If 403/404, reply «не вижу — поделись страницей с интеграцией (Share → Connections → выбери твою интеграцию `<config.notion.integration_name>`) и пришли URL ещё раз». Save IDs into `config.notion.*_id`.
 
 Then probe the schemas. For each provided database, call `mcp__notion__retrieve-a-page` and inspect the property list:
 

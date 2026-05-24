@@ -35,8 +35,15 @@ Before any API call, attempt `mcp__google-workspace__list_calendars user_google_
 ## Message structure
 
 1. **TODAY REVIEW.** Next Actions with `Date=today` where Status ≠ Done/Cancelled. List each (with NA id), ask «What about X? — Done / Move to tomorrow / Cancel / Continue tomorrow». Skip section if all closed.
-2. **Digest 24h.** Across all `config.google.accounts[]`: Gmail (actionable/decision, skip promo/social), Calendar events that passed today + tomorrow's schedule, Notion Inbox + NA changes.
-3. **Control line.** Brief health: last-ok timestamps for the four crons via `cron-log.sh last-ok`.
+2. **Approval required tasks.** Read `/data/tasks-pending.json`. If non-empty, show each task + its NAs. Propose Eisenhower-based date/time for each NA:
+   - Q1 (high + Due ≤ 3d) → tomorrow or day after
+   - Q2 (high, no urgent deadline) → next focus block
+   - Q3 (normal/low + Due ≤ 3d) → short slot this week
+   - Q4 (low, no deadline) → Someday/Maybe
+   Ask: «Одобряешь? [да / подправлю]». On approval → PATCH NAs with proposed Date. Remove from `tasks-pending.json`.
+3. **Flagged tasks.** Read `/data/tasks-flags.json`. If non-empty, surface grouped by reason. Ask user to confirm action or ignore.
+4. **Digest 24h.** Across all `config.google.accounts[]`: Gmail (actionable/decision, skip promo/social), Calendar events that passed today + tomorrow's schedule, Notion Inbox + NA changes.
+5. **Control line.** Brief health: last-ok timestamps for the four crons via `cron-log.sh last-ok`.
 
 Silent if everything is empty.
 
