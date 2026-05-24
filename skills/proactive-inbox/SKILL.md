@@ -11,9 +11,31 @@ Invoked by cron `cgtd-${install_id}-proactive-inbox` (default `13 8-20/2 * * *`)
 
 Read `/data/config.json`.
 
-**Google required for this skill.** Check `config.google.enabled` and `config.google.accounts`. If Google is disabled or accounts list is empty → log `ok` with `google_not_configured`, exit silently. This skill is a no-op without Google.
+**Google required for this skill.** Check `config.google.enabled` and `config.google.accounts`. If Google is disabled or accounts list is empty → log `ok` with `google_not_configured`, exit silently. This skill scans Gmail and Calendar — without Google there is nothing to scan.
 
-Also required: `notion.inbox_id` or `notion.next_actions_id` (at least one). `telegram.chat_id` for output. If Notion not configured → log `fail` with `config_incomplete`, exit.
+**Notion routing** — resolve from config:
+```
+capture_id   = notion.capture.db_id
+actions_id   = notion.actions.db_id → if same_as_capture or empty: capture_id
+reference_id = notion.reference.db_id → null if not set
+```
+- Actionable items (atomic actions, deadlines, RSVPs) → `actions_id`
+- Reference items (articles, receipts without action) → `reference_id` if set, else inline into body at `capture_id`
+- If `capture_id` is empty → log `fail` with `notion_not_configured`, send Telegram «⚠️ Notion не настроен — некуда сохранять. Запусти `/gtd-config`». Exit.
+
+## Runtime property resolution
+
+Before creating Notion entries:
+```
+status_field   = notion.actions.fields.status → null if not set
+status_open    = notion.actions.fields.status_open → fallback "Not started"
+status_deferred = notion.actions.fields.status_deferred → fallback "Someday·Maybe"
+date_field     = notion.actions.fields.date → null if not set
+priority_field = notion.actions.fields.priority → null if not set
+```
+If `status_field` is null → create entries with Name + date body only; omit Status property.
+If `date_field` is null → create entries without date; note date in body text instead.
+If `config.gtd.unmappable_warning: true` → create with Name + body only; skip all fields; label output «⚠️ схема не распознана — создано без полей».
 
 ## Logging wrapper
 
@@ -46,7 +68,7 @@ For each `email` in `accounts`:
 
 Merge across accounts. Dedupe by `message_id` (Gmail) and `event_id` (Calendar). Tag the source account in Telegram output **only when ambiguous** (same title from two accounts).
 
-Also fetch Notion Next Actions + Inbox via `mcp__notion__notion-search` — for dedup only.
+Also fetch `actions_id` + `capture_id` via `mcp__notion__API-post-search` — for dedup only.
 
 ## Gmail classification
 
@@ -85,7 +107,7 @@ If signal present and item not in NA/Inbox → create.
 
 ### Date parsing
 
-**Status–Date invariant.** A page with Status=`Not started` MUST have a Date. Apply this 5-step inference chain before deciding on status:
+**Status–Date invariant.** If `status_field` and `date_field` are both set: an open-status entry MUST have a Date. Apply this 5-step inference chain before deciding on status. If either field is null → skip status/date assignment; include date in body text.
 1. Implicit phrases in text (per `feedback_implicit_dates.md`).
 2. Contextual heuristics (per `feedback_contextual_deadlines.md`): daily-use repair 1–2 weeks, seasonal 3–4 weeks, health/admin 2 weeks, gifts = event date − buffer, package/storage pickup = email date + pickup window − 1 day, marketplace reply (Kleinanzeigen, eBay) = 1–2 days.
 3. Full body read: if not done yet for this email, call `get_gmail_message_content format="full"` and re-parse.
@@ -112,19 +134,20 @@ Triggers:
 
 Do NOT 🚨 priority-signal items alone.
 
-**Notion date format:** When creating pages with a Date property, always use the expanded key format:
-- `"date:Date:start": "YYYY-MM-DD"` (required)
-- `"date:Date:end": "YYYY-MM-DD"` (optional, for ranges such as hotel stays)
-Do NOT use `"Date": "YYYY-MM-DD"` — this causes a validation error.
+**Notion date format:** When creating pages with a date property, use the expanded key format with the actual field name from `date_field`:
+- `"date:<date_field>:start": "YYYY-MM-DD"` (required)
+- `"date:<date_field>:end": "YYYY-MM-DD"` (optional, for ranges)
+Do NOT use `"<date_field>": "YYYY-MM-DD"` — this causes a validation error.
 
 ## Dedup
 
-`mcp__notion__notion-search` by subject/thread_id with `data_source_url` before create.
+`mcp__notion__API-post-search` by subject/thread_id with `data_source_url` before create.
 
 ## Output (one Telegram message via `mcp__plugin_telegram_telegram__reply` to `config.telegram.chat_id`)
 
 - Silent if nothing added and nothing urgent.
 - One summary «➕ N в Next Actions, M в Inbox» with titles/dates/links.
+- If any Google accounts were skipped due to auth failure, add a line: «⚠️ Пропущено: `<email>` (auth истёк — запусти `/cgtd-reauth google <email>`)».
 - Separate 🚨 message for urgent items: what / when / source.
 
 ## Failure modes

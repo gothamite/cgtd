@@ -1,18 +1,4 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(*)",
-      "Read(*)",
-      "Write(*)",
-      "Edit(*)",
-      "mcp__google-workspace__*",
-      "mcp__notion__*",
-      "mcp__plugin_telegram_telegram__*",
-      "Skill(*)",
-      "WebSearch(*)",
-      "WebFetch(*)"
-    ]
-  },
   "mcpServers": {
     "google-workspace": {
       "type": "stdio",
@@ -34,8 +20,5 @@
         "NOTION_TOKEN": "${NOTION_API_KEY}"
       }
     }
-  },
-  "enabledPlugins": {
-    "telegram@claude-plugins-official": true
   }
 }

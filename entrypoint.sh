@@ -42,7 +42,7 @@ mkdir -p /root/.claude/skills
 for skill_dir in /app/skills/*/; do
   name="$(basename "$skill_dir")"
   link="/root/.claude/skills/$name"
-  rm -f "$link"
+  rm -rf "$link"
   if [ -f "$DATA/skills-overlay/$name/SKILL.md" ]; then
     ln -sfn "$DATA/skills-overlay/$name" "$link"
   else
@@ -95,12 +95,35 @@ if [ -f "$DATA/claude-home/settings.json" ]; then
   fi
 fi
 
-# Resolve NOTION_API_KEY: prefer env var, fall back to config.json
-if [ -z "${NOTION_API_KEY:-}" ] && [ -f "$DATA/config.json" ]; then
+# Resolve NOTION_API_KEY: prefer config.json (freshest — set via /gtd-config or /cgtd-reauth),
+# fall back to the env var that came from .env (bootstrap for users who haven't run /gtd-config yet).
+if [ -f "$DATA/config.json" ]; then
   cfg_notion_key=$(jq -r '.notion.api_key // empty' "$DATA/config.json" 2>/dev/null)
   if [ -n "$cfg_notion_key" ]; then
     export NOTION_API_KEY="$cfg_notion_key"
   fi
+fi
+
+# Register MCP servers via claude mcp add on every startup.
+# Claude Code 2.x does not auto-load mcpServers from settings.json in channel/headless mode —
+# only servers registered in .claude.json (via mcp add) are loaded. Since .claude.json is not
+# persisted across restarts, we re-register here. Idempotent: remove-then-add each time.
+if [ -n "${NOTION_API_KEY:-}" ]; then
+  claude mcp remove notion 2>/dev/null || true
+  claude mcp add notion \
+    -e "NOTION_TOKEN=${NOTION_API_KEY}" \
+    -- npx -y @notionhq/notion-mcp-server 2>/dev/null || true
+fi
+
+if [ -n "${GOOGLE_OAUTH_CLIENT_ID:-}" ] && [ -n "${GOOGLE_OAUTH_CLIENT_SECRET:-}" ]; then
+  claude mcp remove google-workspace 2>/dev/null || true
+  claude mcp add google-workspace \
+    -e "GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}" \
+    -e "GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}" \
+    -e "WORKSPACE_MCP_DATA_DIR=/data/mcp/google-workspace" \
+    -e "WORKSPACE_MCP_CREDENTIALS_DIR=/data/mcp/google-workspace/credentials" \
+    -e "OAUTHLIB_INSECURE_TRANSPORT=1" \
+    -- uvx workspace-mcp --tool-tier core 2>/dev/null || true
 fi
 
 exec "$@"

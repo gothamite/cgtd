@@ -9,9 +9,41 @@ Invoked by cron or manually via `/morning`.
 
 ## Pre-flight
 
-Read `/data/config.json`. Required: `user.{locale,timezone}`, `notion.next_actions_id`, `schedule.*`, `telegram.chat_id`.
+Read `/data/config.json`. Required: `user.{locale,timezone}`, `telegram.chat_id`. Everything else degrades gracefully — see Failure modes.
 
 **Google optional:** check `config.google.enabled`. If `false` or `config.google.accounts` is empty → skip all Gmail and Calendar steps silently. Proceed with Notion-only plan.
+
+## Runtime role resolution
+
+Before any Notion query, resolve the active DB and field names:
+
+```
+actions_id       = notion.actions.db_id → if same_as_capture or empty: notion.capture.db_id
+actions_name     = notion.actions.db_name → fallback: notion.capture.db_name
+status_field     = notion.actions.fields.status → fallback: "Status"
+status_open      = notion.actions.fields.status_open → fallback: "Not started"
+status_done      = notion.actions.fields.status_done → fallback: "Done"
+status_cancelled = notion.actions.fields.status_cancelled → fallback: "Cancelled"
+status_deferred  = notion.actions.fields.status_deferred → fallback: "Someday·Maybe"
+date_field       = notion.actions.fields.date → fallback: "Date"
+priority_field   = notion.actions.fields.priority → null if not set (skip priority section)
+
+projects_id     = notion.projects.db_id (resolved) → null if not set
+projects_name   = notion.projects.db_name → fallback: null
+projects_filter = {property, value} or null
+
+calendar_source  = config.gtd.calendar_source  ("google" | "notion" | "both" | "none")
+calendar_integration = config.gtd.calendar_integration  ("unified" | "separate" | "none")
+notion_calendar_id = notion.calendar.notion_db_id  (null if source ≠ "notion"/"both")
+google_calendars   = notion.calendar.google_calendars  ([] if source ≠ "google"/"both")
+
+contexts_mode   = config.gtd.contexts.mode  ("auto" | "explicit" | "none")
+contexts_values = config.gtd.contexts.values  ([] if mode ≠ "explicit")
+contexts_field  = config.gtd.contexts.field  (null if not stored in DB)
+```
+
+If `status_field` is null → fetch all items without status filter; sort by date only.
+If `config.gtd.unmappable_warning: true` → fetch ALL items without any filter; label «⚠️ схема не распознана — показываю всё».
 
 ## Logging wrapper
 
@@ -32,21 +64,40 @@ End with `ok "$RID"` or `fail "$RID" "msg"`.
 
 ## Message structure
 
-1. **Overdue NA sweep.** Enumerate ALL Next Actions with `Date < today` AND Status indicates "not done" (use `config.gtd.next_actions.status_values.done` and `.cancelled` if set, else use Notion DB defaults). No keyword shortcuts. Dedicated section. Skip if `notion.next_actions_id` is empty.
+1. **Overdue sweep.** Enumerate ALL items in `actions_id` with `date_field < today` AND status ≠ `status_done` / `status_cancelled`. If `status_field` is null → filter by date only. Skip if `date_field` is null.
 
-2. **Today's anchors** (do not move):
-   - **[Google only]** Calendar events today across all `config.google.accounts[]`.
-   - NA with `Date.start = today`. User already scheduled them.
+2. **Today's anchors** (fixed, do not move):
+   - **Calendar events** — fetch based on `calendar_source`:
+     - `"google"` or `"both"`: `mcp__google-workspace__get_events` for today across `google_calendars` (or all if `["*"]`).
+     - `"notion"` or `"both"`: query `notion_calendar_id` for events with date = today.
+     - `"none"`: skip Calendar entirely.
+   - **Scheduled actions** — items in `actions_id` with `date_field.start = today`. Skip if `date_field` is null.
+   - If `calendar_integration = "unified"`: deduplicate Calendar events and actions by title/topic — show each only once.
 
-3. **[Google only] Gmail 24h.** Skip promo/social, only actionable/decision items. Cross-account. Omit this section entirely if `config.google.enabled` is false.
+3. **[Google only] Gmail 24h.** Skip promo/social, only actionable/decision items. Omit if `config.google.enabled` is false.
 
-4. **TODAY PLAN with time blocks.** Fill around anchors per `config.schedule.weekday_blocks` (or weekend rule on Sat/Sun). Propose slots with NA tokens for approval. Do NOT re-slot anchored NA. Write approved items via `mcp__notion__notion-update-page` only after user confirms.
+4. **TODAY PLAN with time blocks.** Fill free slots around anchors per `config.schedule.weekday_blocks` (or weekend rule). Propose time slots for approval. Do NOT re-slot anchored items. Apply pre-slotting checks (time, conflicts, human needs). Write approved items via `mcp__notion__API-patch-page` only after user confirms. If `date_field` is null → skip time-blocking; go straight to step 5.
 
-5. **Free-slot reserve.** Pull from NA with deferred/someday status AND no Date, prioritized by importance (use `config.gtd.priority_scheme` if set, else Eisenhower Q1→Q4 as default). Apply `config.schedule.weekend_rule` on weekends — `flex` means no category filtering; `rest` means prefer lower-effort items; user's custom narrative overrides all.
+5. **Someday/Maybe — daily review and slot proposals.** This runs every day without exception.
 
-6. **Approval required tasks.** If `config.notion.tasks_id` is set and `/data/tasks-pending.json` exists: read it, show task title + NA titles, propose date/time slots. Ask for approval. On approval → PATCH each NA with proposed Date. Remove from `tasks-pending.json`. Skip if tasks not configured.
+   Query `actions_id` for ALL items with status = `status_deferred` AND date value is null or empty (not the field name — the actual stored value). These are candidates to schedule today.
 
-7. **Flagged tasks.** Read `/data/tasks-flags.json` if it exists. Surface grouped by reason. Skip if file absent.
+   **Prioritization** (apply before presenting):
+   - If `priority_field` is set → sort by it descending.
+   - Else apply Eisenhower heuristic: infer urgency/importance from title + deadline hints + user narrative.
+   - If `contexts_mode = "explicit"`: group by context (`contexts_field` value or inferred from title) — batch items sharing a context into the same time slot.
+   - If `contexts_mode = "auto"`: silently group by inferred context before presenting (all @computer tasks together, all errands together, etc.). Don't show context labels unless natural.
+
+   **Propose for today's free slots:**
+   - Select the top N items that fit available time + context + energy (morning = high-focus, afternoon = medium, evening = routine).
+   - Present as concrete proposals: «Предлагаю на сегодня: [X] в 15:00, [Y] после обеда». Don't just list — propose specific slots.
+   - Items not proposed → remain in Someday/Maybe with no change.
+
+   **If `date_field` is null** (user has no date property): show ALL open items as candidates, suggest which to tackle today, ask user to confirm. This is the primary planning output for single-list users.
+
+6. **Pending approvals.** If `projects_id` is set and `/data/tasks-pending.json` exists: read it, show project title + linked action titles, propose date/time slots. Skip if `projects_id` is null.
+
+7. **Flagged projects.** Read `/data/tasks-flags.json` if it exists. Surface grouped by reason. Skip if file absent or `projects_id` is null.
 
 8. **Closing line** in `config.user.locale`.
 
@@ -56,7 +107,7 @@ Write a JSON line to `/data/pending-reviews.jsonl`:
 ```
 {"cron_id":"morning-ritual","ts":"<iso>","items":[{"na_id":"...","title":"...","start":"...","end":"..."}]}
 ```
-TTL 6h. When the user replies in Telegram, the inbox-router skill matches against this entry, applies via `notion-update-page`, removes the entry.
+TTL 6h. When the user replies in Telegram, the inbox-router skill matches against this entry, applies via `API-patch-page`, removes the entry.
 
 ## Slotting
 
@@ -120,16 +171,18 @@ Some NAs have a "launch → machine runs → finish" structure. Detect by contex
 ]
 ```
 
-### Context-stacking for errands
+### Context-stacking
 
-When slotting from deferred/someday items:
-- **Location/tool grouping.** Batch NAs that share a context: all-computer tasks together, all outside-errands together. Don't interleave arbitrarily.
-- **Scan deferred items.** Always check deferred/someday NAs for items compatible with today's context. Slot the best fits by priority. Don't just list — propose a concrete slot.
-- **Parallel slotting.** Multiple errands may share one slot if contextually compatible OR each <15 min.
-- **Trip-based grouping.** If an anchored NA implies going out, sweep deferred items for compatible errands.
+When selecting and slotting Someday/Maybe items:
+
+- **Always group by context** regardless of `contexts_mode`. If explicit contexts are set in config → use `contexts_field` values. If `auto` → infer from title keywords: "позвонить/call" → @phone, "купить/магазин" → @errands, "компьютер/написать/отправить" → @computer, "дома/дом" → @home.
+- **Batch items sharing a context** into the same time slot. Don't interleave @errands and @computer tasks arbitrarily.
+- **Trip-based grouping.** If an anchored item implies going out → sweep Someday/Maybe for compatible @errands and bundle them.
+- **Parallel slotting.** Multiple short items (<15 min) sharing a context can occupy one slot.
+- **If `contexts_mode = "explicit"`**: show context label explicitly in output (e.g. «@errands: купить молоко, зайти на почту»). If `"auto"` → group silently, no explicit label unless it adds clarity.
 
 ## Failure modes
 
-- Notion MCP unauthenticated → skip Notion sections, still send a rough plan with what's available.
-- **[Google only]** `invalid_grant` for an account → log `fail` with `google_auth_expired:<email>`, ping Telegram to run `/cgtd-reauth`, exit.
-- `notion.next_actions_id` empty → skip NA sections, send "⚠️ Next Actions DB not configured" + Gmail/Calendar digest if available.
+- Notion MCP unauthenticated → skip all Notion sections; still send a plan based on Gmail/Calendar if Google is enabled. If neither is available, send «⚠️ Notion недоступен, Google не подключён — план пуст. Запусти `/cgtd-reauth notion`».
+- **[Google only]** `invalid_grant` for an account → send Telegram «Google auth для `<email>` истёк. Запусти `/cgtd-reauth google <email>`». **Do NOT exit** — continue with remaining accounts + full Notion plan. Log `degraded` (not `fail`).
+- `notion.actions.db_id` empty → skip Notion sections, proceed with Calendar + Gmail digest if available. Do not exit.

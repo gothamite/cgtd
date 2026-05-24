@@ -8,7 +8,7 @@ Use `format="markdownv2"` for rich formatting. Escape special chars per Markdown
 
 At the start of every session, before doing anything else:
 
-1. Read `/data/config.json`.
+1. Read `/data/config.json`. If `config.user.persona_file` is non-empty, also read `/root/.claude/projects/-app/memory/<config.user.persona_file>` and apply the described persona to all Telegram replies from this point on.
 2. If `init_complete` is `true` and `jobs` block exists:
    - Call `CronList` to see what's currently scheduled.
    - For each enabled job in `config.jobs`, if its cron is not present in CronList output, recreate it with `CronCreate` (recurring: true) using the schedule and prompt below.

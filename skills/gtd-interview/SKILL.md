@@ -48,7 +48,7 @@ Ask one message:
 
 > Хочешь подключить Google (Gmail + Calendar)?
 > Это позволит мне:
-> — читать входящие и добавлять важное в Notion автоматически
+> — читать Inbox и добавлять важное в Notion автоматически
 > — видеть твои встречи при планировании дня
 > — сохранять файлы, которые ты пересылаешь мне, на Google Drive
 >
@@ -84,7 +84,7 @@ After the loop:
 
 ## Section 4 — Notion API key
 
-1. Call `mcp__notion__notion-search` with `query=""`.
+1. Call `mcp__notion__API-post-search` with `query=""`.
    - If it returns valid results or an empty list → key already configured (came from `.env`). Advance `init-progress.json` `section` to `"drive_folder"` if `config.google.drive_enabled` is true, else to `"gtd_interview"`. Continue to the appropriate section.
    - If it returns an error (MCP not connected / key missing) → proceed to step 2.
 
@@ -109,7 +109,7 @@ After the loop:
    > ```
    > После перезапуска напиши `/gtd-config` — продолжим с настройки баз данных Notion.
 
-5. On next `/gtd-config` invocation: state machine loads `section = "drive_folder"` and resumes there. At the top of the `drive_folder` handler, call `mcp__notion__notion-search` with `query=""` to verify connectivity. If it fails, tell the user the key isn't working and prompt them to check `.env` / restart again. If it succeeds, proceed normally.
+5. On next `/gtd-config` invocation: state machine loads `section = "drive_folder"` and resumes there. At the top of the `drive_folder` handler, call `mcp__notion__API-post-search` with `query=""` to verify connectivity. If it fails, tell the user the key isn't working and prompt them to check `.env` / restart again. If it succeeds, proceed normally.
 
 ## Section 5 — Drive folder (only if `config.google.drive_enabled: true`)
 
@@ -127,88 +127,310 @@ Save `folder_id` into `config.google.drive_inbox_folder_id`. Reply «✓ соз�
 
 ## Section 6 — GTD interview (the customization core)
 
-This is the section where the user's existing Notion layout — or absence of one — becomes the assistant's vocabulary.
+This is where the user's existing Notion layout — whatever it looks like — becomes the assistant's vocabulary. The system has **no requirements** about DB names, hierarchy, or property names. It maps to four semantic roles and works with whatever the user has.
 
-### 6.1 — does the user already have a GTD setup in Notion?
+### Semantic roles
 
-Ask: «У тебя уже настроена GTD-система в Notion (Inbox, Next Actions, проекты, заметки)? `да` / `нет`».
+| Role | Purpose | Required? |
+|------|---------|-----------|
+| **INBOX** | Where new items land first — the entry point | Yes (at least one) |
+| **ACTIONS** | Schedulable atomic tasks the user will do | Optional |
+| **PROJECTS** | Multi-step goals with sub-tasks | Optional |
+| **REFERENCE** | Notes, articles, contacts — info without an action | Optional |
 
-**If "нет":** offer to create the default layout.
+Any role can map to the same DB as another. Multiple DBs can serve the same role. A user with only one list → INBOX = ACTIONS = that list. A user with no task list → INBOX only.
 
-> Я могу создать тебе структуру в Notion — Inbox, Next Actions, Tasks и Notes — под одной родительской страницей. Это стандартная GTD-схема, с которой все функции работают из коробки. Создать?
+### 6.1 — discover existing Notion setup (proactive)
 
-If yes:
-- Ask the user for the URL of any Notion page where the GTD parent should live (or «создать на верхнем уровне workspace»).
-- Call `mcp__notion__notion-create-pages` to create:
-  - Parent page «🗂 GTD»
-  - Inside it: 4 databases:
-    - **Inbox**: Name, Source (text), Created (date), URL (url)
-    - **Next Actions**: Name, Status (status: Not started/Done/Cancelled/Someday\nMaybe), Date (date), Priority (select: high/normal/low), Task (relation→Tasks)
-    - **Tasks**: Name, Status (status groups: todo=Inbox/Not Started/Next to Come/Maybe, in\_progress=In Progress/Waiting, complete=Done/Canceled/Archive/Approval required), Priority (select: high/normal/low), Due (date), Next Actions (relation→Next Actions)
-    - **Notes**: Name, Category (select), Tags (multi-select), Source (text), URL (url)
-- Save the page/database IDs into `config.notion.{inbox,next_actions,tasks,notes}_id`.
-- Set `config.gtd.has_tasks_db: true`, `config.gtd.has_projects_db: false`.
-- Skip 6.2 — user gets the default skill behavior with no overlays needed.
+**Do not ask anything yet.** First, probe Notion silently:
 
-**If "да":** run the interview below.
+Run all searches in parallel:
+```
+mcp__notion__API-post-search query=""
+mcp__notion__API-post-search query="inbox"
+mcp__notion__API-post-search query="tasks"
+mcp__notion__API-post-search query="actions"
+mcp__notion__API-post-search query="projects"
+mcp__notion__API-post-search query="notes"
+mcp__notion__API-post-search query="reference"
+mcp__notion__API-post-search query="входящие"
+mcp__notion__API-post-search query="задачи"
+mcp__notion__API-post-search query="проекты"
+mcp__notion__API-post-search query="заметки"
+```
 
-### 6.2 — interview an existing setup
+Collect all results where `object = "database"`. Deduplicate by `id`. Save as `section_state.discovered_dbs[]` (id, name, url). This list is reused throughout 6.2 — Steps 1–4 accept a number from this list instead of a URL paste.
 
-Ask, one question per Telegram message, waiting for reply:
+**If 1+ databases found** → send ONE message:
 
-1. «Скинь URL твоей **Inbox** базы (или эквивалента — куда падает всё непомеченное).»
-2. «Скинь URL **Next Actions** или эквивалента (атомарные действия с датой).»
-3. «У тебя есть отдельная база для **Проектов** — многошаговых целей верхнего уровня (например "Построить дом", "Запустить продукт")? Если да — URL; если нет — `нет`.» Save DB ID into `config.notion.projects_id`. Set `config.gtd.has_projects_db: true` if URL provided, `false` if "нет".
+> Нашёл в Notion следующие базы данных, к которым у меня есть доступ:
+> 1. «Inbox» — notion.so/…
+> 2. «Tasks» — notion.so/…
+> 3. «Projects» — notion.so/…
+> …
+>
+> Используешь какую-то из них как Inbox (для задач, проектов, заметок)? Или эти базы для другого — и лучше создать новые?
 
-4. «У тебя есть отдельная база для **Задач** — конкретных шагов внутри проектов (например "Залить фундамент", "Подключить отопление")? Если да — URL; если нет — `нет`.» Save DB ID into `config.notion.tasks_id`. Set `config.gtd.has_tasks_db: true` if URL provided, `false` if "нет". *(Все четыре комбинации валидны: оба / только Projects / только Tasks / ни того ни другого.)*
+Reply options:
+- **«да, вот эти» / номера** → proceed to 6.2 role assignment using the selected databases.
+- **«нет, эти для другого»** → offer creation options (see below).
+- **«частично»** → proceed to 6.2; user picks numbers for existing DBs and says «нет» for roles without a match.
 
-5. «Как ты ведёшь расписание рядом с Next Actions? `1)` Calendar и NA — одна база (NA сразу попадают в Календарь) `2)` раздельно — NA в Notion, встречи в Google Calendar `3)` не использую Календарь для планирования.» Save `config.gtd.calendar_integration: "unified" | "separate" | "none"`. If Google is not enabled (`config.google.enabled: false`) → auto-select `"none"`, skip this question.
+**If 0 databases found** (integration not shared with any DB yet) → send:
 
-6. «База для **заметок / референсов** (статьи, контакты, идеи)? URL или `нет`.»
+> Не нашёл баз данных Notion, к которым у меня есть доступ. Создать структуру с нуля?
+> `1)` Полная GTD-структура (4 базы)
+> `2)` Простой список (одна база — всё в одном месте)
+> `3)` Сам скажу что создавать
 
-For each provided URL: call `mcp__notion__retrieve-a-page` to validate access. If 403/404, reply «не вижу — поделись страницей с интеграцией (Share → Connections → выбери твою интеграцию `<config.notion.integration_name>`) и пришли URL ещё раз». Save IDs into `config.notion.*_id`.
+**Creation options (options 1/2/3):**
 
-Then probe the schemas. For each provided database, call `mcp__notion__retrieve-a-page` and inspect the property list:
+For **option 1** (full GTD):
+- Ask for a parent page URL (or «создать на верхнем уровне»).
+- Create parent page «🗂 GTD», inside it:
+  - **Inbox** — Name (title), Source (text), URL (url)
+  - **Actions** — Name (title), Status (status: Not started / Done / Cancelled / Someday·Maybe), Date (date), Priority (select: high / normal / low)
+  - **Projects** — Name (title), Status (status: Inbox / In Progress / Done / On hold), Due (date), Priority (select: high / normal / low), Actions (relation → Actions)
+  - **Notes** — Name (title), Category (select), Tags (multi-select), Source (text), URL (url)
+- Save into config: `notion.capture.db_id` = Inbox ID; `notion.actions.db_id` = Actions ID; `notion.projects.db_id` = Projects ID with `actions_relation = "Actions"`; `notion.reference.db_id` = Notes ID.
+- Populate all `fields.*` from the created schemas.
+- Skip 6.2.
 
-8. For the Inbox/Next Actions/Tasks DBs that exist:
-   - Find the **Status** property (any property of type `status` or `select`). Send: «В `<DB>` твой статус-проперти называется `<name>` со значениями: `<list>`. Какое значение означает «не сделано / новое»? «в работе»? «сделано»? «отменено»? «отложено / someday»? Можно пропустить, если значения не подходят.»
-   - Save into `config.gtd.<db>.status_field` + `status_values.{open,in_progress,done,cancelled,deferred}`.
-   - Find the **Date** / **Deadline** property if present. Send: «Поле даты — `<name>`? Используется для дедлайна или для расписания?» Save.
-   - Find any **priority** property (Eisenhower, P1-P4, etc.). Send: «Есть приоритеты? Поле `<name>` со значениями `<list>` — это что? Эйзенхауэр / P1-P4 / другое / не используется.» Save into `config.gtd.priority_scheme`.
+For **option 2** (single list):
+- Ask for a parent page URL (or «создать на верхнем уровне»).
+- Create one DB: **My List** — Name (title), Status (select: New / In Progress / Done), Date (date), Notes (text).
+- Set `notion.capture.db_id` = that DB. Set `notion.actions = {same_as_capture: true}`. Leave `notion.projects` and `notion.reference` empty.
+- Skip 6.2.
 
-9. Notes DB (if present): «Какие у тебя поля в Notes — категория, тэги, источник? Перечисли.» Save into `config.gtd.notes.fields`.
+For **option 3**: run the interview in 6.2 (user will provide URLs or create selectively).
 
-10. Free-form: «Расскажи коротко своими словами, как ты пользуешься этой системой день в день. Что ты делаешь утром? Что вечером? Как обрабатываешь Inbox? Что особенного я должен учитывать?» — save the answer verbatim into `config.gtd.user_narrative`. The morning-ritual / evening-review / process-inbox skills will read this when generating their output to align with the user's voice.
+### 6.2 — role-based interview
 
-### 6.3 — generate skill overlay
+`section_state.discovered_dbs[]` is already populated from 6.1. In each step, the user can reply with a **number from that list** instead of pasting a URL. One question per Telegram message. Validate every URL immediately — if 403/404, prompt: «не вижу эту базу — поделись страницей с интеграцией `<config.notion.integration_name>` (Share → Connections) и пришли снова».
 
-Based on `config.gtd.*`, write customized SKILL.md files into `/data/skills-overlay/<name>/SKILL.md` for any skill whose default behavior needs adapting:
+---
 
-- **process-inbox** — replace hardcoded Status values («Not started» / «Done» / «Cancelled» / «Someday/Maybe») with `config.gtd.next_actions.status_values.*`. Replace data-source IDs with `config.notion.*_id`. Routing logic adapts to the user's DB structure:
+**Step 1 — INBOX role**
 
-  | `has_projects_db` | `has_tasks_db` | Behavior |
-  |---|---|---|
-  | false | false | All multi-step work → Next Actions. Drop Tasks/Projects routing branches. |
-  | true | false | Multi-step goals → `config.notion.projects_id`. Steps tracked as NA directly. |
-  | false | true | Steps → `config.notion.tasks_id`. No Projects level — route project-like items to Tasks DB as the closest available container (not to Next Actions). |
-  | true | true | Full hierarchy: Goals → Projects, Steps → Tasks, Atomic → Next Actions. |
+If `discovered_dbs` is non-empty:
+> Куда в Notion попадает всё новое — мысли, задачи, ссылки? Назови номер из списка или пришли URL.
 
-  If a flag is `true` but the corresponding `_id` is null (URL validation failed during interview), emit a Telegram warning on first run: «Настроена база [Projects/Tasks] но ID не найден — проверь `/gtd-config`.»
+If `discovered_dbs` is empty:
+> Куда в Notion попадает всё новое — мысли, задачи, ссылки, что угодно — когда ты хочешь это не забыть? Скинь URL базы данных.
 
-  For calendar: if `calendar_integration: "unified"`, dedup Next Actions against Calendar events by event_id before creating. If `"separate"`, create independently. If `"none"`, omit Calendar references.
+- If user replies with a number → resolve to `discovered_dbs[n]`. Use its id and URL directly.
+- If user replies with a URL → validate access via `mcp__notion__API-retrieve-a-page`. If 403/404 → prompt to share with integration.
+- If user has multiple capture points: ask for additional (by number or URL); store all as array in `notion.capture`.
+- Save to `notion.capture.db_id`, `notion.capture.db_name`.
 
-  If user has no Notes DB, drop the Notes branch and inline references into Inbox body.
-- **morning-ritual** — replace status filter («Status ∉ {Done, Cancelled}») with the user's terms. Replace Eisenhower references with `config.gtd.priority_scheme` (drop entirely if `none`). For `calendar_integration: "unified"`: present Calendar and NA as one merged schedule, deduplicate by event_id. For `"separate"`: two parallel sections (Calendar, then NA). For `"none"`: omit Calendar section.
-- **evening-review** — same status replacements. Same `calendar_integration` rendering as morning-ritual: for `"unified"` → merged schedule with dedup by event_id; for `"separate"` → two parallel sections; for `"none"` → omit Calendar section.
-- **proactive-inbox** — replace status terms; if user has no Notes DB, route newsletters/references to Inbox body instead. If `config.google.enabled: false`, this skill is a no-op — note that in the overlay header.
-- **tasks-processing** — if `config.gtd.has_tasks_db` is false, overlay replaces entire skill body with "exit silently — no tasks DB". Otherwise: replace all hardcoded status values (Inbox, Approval required, Not Started, Next to Come, Maybe, In Progress, Waiting, Done, Canceled, Archive) with `config.gtd.tasks.status_values.*`. Save the mapping into `config.gtd.tasks.status_values` during the probing step (Section 6.2 question 4).
-- **inbox-router** — replace `notion.inbox_id` reference (already config-driven, so usually no overlay needed unless user opted out of Inbox-everything).
+**Probe Inbox schema** — run silently, no questions yet:
+1. Call `mcp__notion__API-retrieve-a-page` on the DB to get all properties.
+2. Auto-map fields using these heuristics:
+   - Title-type property → `capture.fields.title`
+   - Status/select field → `capture.fields.status`. Auto-map values by name:
+     - Contains "done", "готово", "complete", "finished", "closed" → `status_done`
+     - Contains "cancel", "отменен", "won't", "не буду" → `status_cancelled`
+     - Contains "someday", "maybe", "когда-нибудь", "отложен", "later", "потом" → `status_deferred`
+     - Contains "progress", "в работе", "doing", "active", "в процессе" → `status_in_progress`
+     - Remaining open/first value → `status_open`
+   - Date-type property → `capture.fields.date`
+   - Select/number property with values like "high/medium/low", "P1/P2/P3", "Q1/Q2/Q3/Q4", "urgent/important" → `capture.fields.priority`
+   - All other properties → `capture.fields.extra[]`
+3. Send ONE confirmation message only if mapping is ambiguous:
+   > Нашёл в `<DB name>`: статус = `<field>` (`open`→«<val>», `done`→«<val>», `deferred`→«<val>»), дата = `<field or нет>`, приоритет = `<field or нет>`. Всё верно?
+   
+   If mapping is unambiguous (values clearly named) → skip the question entirely, proceed silently.
+4. If no status field found → `capture.fields.status = null`. No question needed.
 
-Method: read each shipped `/app/skills/<name>/SKILL.md`, run substitution on the named hardcoded strings, write the result to `/data/skills-overlay/<name>/SKILL.md`. Substitutions are recorded in `config.gtd.overlay_substitutions[]` so a future `/cgtd-reset-skills` knows what was changed.
+This full probe result is reused when ACTIONS or PROJECTS role is `same_as_capture`.
 
-If `config.gtd.user_narrative` is non-empty, append a `## User narrative` section to each generated overlay so every skill run picks up the user's day-in-the-life context.
+---
 
-After writing overlays, the entrypoint's per-skill symlinking (already in `entrypoint.sh`) will pick them up on next session start. The current Telegram channel session must be restarted for skills to reload — tell the user at the end.
+**Step 2 — ACTIONS role**
+
+> Где находятся конкретные действия или задачи, которые нужно выполнить? Это та же база или отдельная? (номер из списка / URL / «та же»)
+
+Reply options:
+- **«та же»** / «одна база» / номер совпадает с INBOX → set `notion.actions.same_as_capture = true`. Copy fields from Inbox probe into `notion.actions.fields`. No probe needed.
+- **«нет»** / «не веду» / «нет такого» → `notion.actions.same_as_capture = true` silently (skills fall back to Inbox).
+- **Номер из discovered_dbs** (≠ INBOX) → resolve to that DB. Validate, fetch, save to `notion.actions.db_id`, `notion.actions.db_name`. Run probe below.
+- **URL** → validate, fetch, save to `notion.actions.db_id`, `notion.actions.db_name`. Run probe below.
+
+**Probe ACTIONS schema** (if separate DB — same silent auto-mapping as Inbox):
+1. Call `mcp__notion__API-retrieve-a-page` to get all properties.
+2. Auto-map: status field + values, date field, priority field — same heuristics as above → save to `notion.actions.fields.*`
+3. Relation fields: look for properties of type `relation`. For each found, check which DB it points to. If it points to a DB that matches the later-declared projects DB → `notion.actions.fields.project_relation = <field name>`. (If projects DB not known yet → revisit this field after Step 3.)
+4. Send one confirmation only if ambiguous. Skip if clear.
+
+---
+
+**Step 3 — PROJECTS role**
+
+> Есть ли место для многошаговых целей или проектов? Отдельная база, та же что и действия, та же что и первая, или нет? (номер из списка / URL / «та же» / «нет»)
+
+Reply options:
+- **«та же что и действия»** → `notion.projects.same_as_actions = true`. Run filter detection below on the actions DB.
+- **«та же что и первая»** → `notion.projects.db_id = notion.capture.db_id`. Run filter detection below on the capture DB.
+- **Номер из discovered_dbs** (≠ уже назначенных) → resolve to that DB. Validate, fetch, save to `notion.projects.db_id`, `notion.projects.db_name`. Run probe below.
+- **URL** → validate, fetch, save to `notion.projects.db_id`, `notion.projects.db_name`. Run probe below.
+- **«нет»** → leave empty.
+
+**Filter detection** (when projects share a DB with actions/capture):
+1. Call `mcp__notion__API-retrieve-a-page` on the shared DB.
+2. Look for select/multi-select fields with values that distinguish type: "Project", "Task", "Action", "Проект", "Задача", "Тип", "Type", "Kind".
+3. Fetch 10–20 sample entries via `mcp__notion__API-query-data-source` to see actual field values in use.
+4. If a candidate filter is found → present it:
+   > Похоже, проекты от действий отличаются полем `<field>` = «<value>». Использовать это как фильтр?
+5. If no field found → set `filter_property = null`. Skills treat all items uniformly.
+
+**Probe PROJECTS schema** (if separate DB):
+1. Auto-map: status (with semantic mapping), due date, priority — same heuristics.
+2. Relation fields: look for relation pointing to actions DB → `notion.projects.fields.actions_relation`.
+3. Send one confirmation only if ambiguous.
+4. If actions_relation is found → go back and fill `notion.actions.fields.project_relation` if it was empty.
+
+---
+
+**Step 4 — REFERENCE role**
+
+> Есть ли место для заметок, статей, идей — информации без конкретного действия? (номер из списка / URL / «нет»)
+
+- **Номер из discovered_dbs** (≠ уже назначенных) → resolve to that DB. Call `mcp__notion__API-retrieve-a-page` → auto-detect: title, category/select, tags/multi-select, text fields named "source"/"url". Save to `notion.reference.fields.*`. No questions unless schema is unclear.
+- **URL** → validate, call `mcp__notion__API-retrieve-a-page` → auto-detect fields. Save to `notion.reference.fields.*`. No questions unless schema is unclear.
+- **«нет»** → leave empty.
+
+---
+
+**Step 5 — Calendar**
+
+Do not ask which Calendar the user uses — discover it first:
+
+**If `config.google.enabled: true`:**
+1. Call `mcp__google-workspace__list_calendars` for each account in `config.google.accounts`.
+2. Collect all available calendars across accounts.
+3. Send ONE message:
+   > Нашёл у тебя эти календари в Google: `<list with names>`. Какие использовать для планирования? (все / выбери номера / исключи ненужные)
+   
+   Default "все" if user doesn't specify. Save selected to `notion.calendar.google_calendars`.
+4. Set `config.gtd.calendar_source: "google"` (or `"both"` if Notion Calendar is also found).
+
+**Regardless of Google:** ask once:
+> Есть ли у тебя база в Notion специально для событий/встреч (Notion Calendar)? URL или «нет».
+
+- **URL** → validate, `mcp__notion__API-retrieve-a-page` → auto-detect date fields (look for date-type properties; first date → `date_start`, second date → `date_end`), title, status. Save to `notion.calendar.*`. Set `calendar_source` to `"notion"` or `"both"`.
+- **«нет»** → skip. If Google already found → `calendar_source: "google"`.
+
+**If Google disabled AND no Notion Calendar URL:**
+- Set `calendar_source: "none"`. Say: «Без календаря система составит план-список без привязки ко времени. Подключить можно позже через `/gtd-config`.»
+
+**If both sources found:** ask:
+> Google Calendar и Notion Calendar — какой главный для рабочих задач? (google / notion)
+Save to `config.gtd.calendar_integration: "google_primary" | "notion_primary"`.
+
+**Final question** (if any calendar configured):
+> NA из Notion попадают в Calendar автоматически (`unified`) или ты ведёшь их отдельно (`separate`)?
+Save `config.gtd.calendar_integration: "unified" | "separate"`.
+
+---
+
+**Step 6 — Contexts**
+
+Do not ask — detect first:
+
+1. Call `mcp__notion__API-retrieve-a-page` on the actions DB (or capture DB if same).
+2. Look for multi-select or select properties named "Context", "Контекст", "Tags", "Тэги", "Labels", "Category".
+3. Fetch 15–20 sample entries via `mcp__notion__API-query-data-source` and scan values for @-prefixed patterns or location/tool keywords (computer, phone, home, office, shop, errands, звонок, магазин, дома).
+4. **If an explicit context field is detected:**
+   > Нашёл поле `<field>` с контекстами: `<list of values>`. Использовать для группировки задач при планировании?
+   - User confirms → `contexts.mode: "explicit"`, `contexts.field: <field>`, `contexts.values: <detected list>`.
+   - User says "no" → `contexts.mode: "auto"`.
+5. **If no explicit field found but @ patterns in titles:**
+   > Вижу, что в названиях задач встречаются метки типа `@computer`, `@phone`. Хочешь использовать их для группировки? Или добавить отдельное поле?
+   - "использовать как есть" → `contexts.mode: "explicit"`, `contexts.field: "title"`, extract values from sample entries.
+   - "добавить поле" → note in config; explain they can add manually; `contexts.mode: "auto"` for now.
+   - "нет" → `contexts.mode: "auto"`.
+6. **If nothing detected:**
+   - Set `contexts.mode: "auto"` silently. No question asked. AI will infer context from task text at runtime.
+
+**Step 7 — Free-form**
+
+> Расскажи коротко своими словами как ты пользуешься этой системой день в день. Что делаешь утром? Вечером? Как обрабатываешь Inbox? Что важно учитывать?
+
+Save verbatim to `config.gtd.user_narrative`.
+
+---
+
+After steps 1–7, send a confirmation summary:
+
+> Вот как я тебя понял:
+> — Inbox: `<capture.db_name>`
+> — Действия: `<actions.db_name or «та же база» or «нет — всё в Inbox»>`
+> — Проекты: `<projects.db_name or «нет»>`
+> — Заметки: `<reference.db_name or «нет — в теле записей»>`
+> — Календарь: `<calendar_source: Google / Notion "<db_name>" / оба / нет>`
+> — Контексты: `<"auto — выявляю сам" or список значений>`
+>
+> Всё верно? Или поправить?
+
+On confirmation → proceed to 6.3. On correction → re-ask the relevant step.
+
+### 6.3 — generate skill overlays
+
+Write customized SKILL.md files to `/data/skills-overlay/<name>/SKILL.md`. Method: read `/app/skills/<name>/SKILL.md`, apply substitutions, write result. Record substitutions in `config.gtd.overlay_substitutions[]`.
+
+**Routing resolution** (computed once, used by all overlays):
+
+```
+capture_id   = config.notion.capture.db_id
+capture_name = config.notion.capture.db_name
+
+actions_id   = notion.actions.db_id if not same_as_capture else capture_id
+actions_name = notion.actions.db_name if set else capture_name
+
+projects_id   = notion.projects.db_id if not same_as_* else resolved parent id
+projects_name = notion.projects.db_name if set else actions_name
+projects_filter = {property: notion.projects.filter_property, value: notion.projects.filter_value} or null
+
+reference_id   = notion.reference.db_id or null
+reference_name = notion.reference.db_name or null
+
+calendar_source      = config.gtd.calendar_source
+calendar_integration = config.gtd.calendar_integration
+notion_calendar_id   = notion.calendar.notion_db_id or null
+google_calendars     = notion.calendar.google_calendars or []
+
+contexts_mode   = config.gtd.contexts.mode
+contexts_values = config.gtd.contexts.values
+contexts_field  = config.gtd.contexts.field or null
+```
+
+**per-skill overlay rules:**
+
+- **inbox-router** — replace capture target with `capture_id`. No other changes needed.
+
+- **process-inbox** — substitute all DB IDs and field names from roles. Routing logic:
+  - atomic action → `actions_id` (if set) else `capture_id`
+  - multi-step / goal → `projects_id` (if set) else `actions_id` (if set) else `capture_id`; apply `projects_filter` if set
+  - reference / info → `reference_id` (if set) else inline into Inbox entry body with 📚 prefix
+  - If `actions_id == capture_id` and `projects_id == capture_id`: everything stays in one DB; use tags / status values to distinguish; do not create separate entries.
+  - Replace Status values with role-specific values from config fields.
+
+- **morning-ritual** — substitute `actions_id` as the source for today's plan. If `actions_id == capture_id`, query Inbox with date filter. Replace status values from `notion.actions.fields`. Replace priority field (omit section if null). Substitute calendar resolution: `calendar_source` drives step 2 (Google events / Notion calendar / both / none); `calendar_integration` drives dedup logic. Substitute contexts: `contexts_mode` + `contexts_values` + `contexts_field` drive step 5 grouping and step 4 slotting.
+
+- **evening-review** — same substitutions as morning-ritual. TODAY REVIEW queries `actions_id`; if same as capture, filter by date. Calendar source for tomorrow's preview uses the same `calendar_source` resolution.
+
+- **proactive-inbox** — route actionable items to `actions_id` (or `capture_id` if absent); reference to `reference_id` (or inline). Replace field names and status values. If `config.google.enabled: false` → overlay marks skill as no-op.
+
+- **tasks-processing** — substitute `projects_id` as the task source. Apply `projects_filter` to all queries. Replace all status values from `notion.projects.fields.*`. Replace relation field names: `projects.fields.actions_relation` for the Projects→Actions link. If `projects_id` is empty → overlay replaces the entire skill body with a silent exit. If `projects.fields.actions_relation` is null → skip graduation logic (Part B Step 1); surface projects as-is.
+
+If `config.gtd.user_narrative` non-empty → append a `## User narrative` section to every overlay.
+
+After writing overlays, tell the user:
+> Настройки сохранены. Перезапусти channel-сессию чтобы скиллы подхватили твою конфигурацию:
+> ```
+> docker compose restart assistant
+> docker compose exec -it assistant claude --channels plugin:telegram@claude-plugins-official
+> ```
 
 ## Section 7 — schedule
 
@@ -225,14 +447,59 @@ Save verbatim to `config.user.weekend_preference`. Also extract a machine-readab
 - Explicit "subbota=otdykh, voskresenye=dela" or similar asymmetric split → `"custom"` (save the split in `config.user.weekend_preference`)
 - No preference / flexible / both same → `"flex"`
 
-**7.3** «В какое время обычно обедаешь? Напиши: дома (выходные, удалёнка) и на работе. Например: "дома — 14:30, работа — 12:30". Или `пропустить`.»
+**7.3** Lunch time — **discover before asking:**
+
+If `config.google.enabled: true`: call `mcp__google-workspace__get_events` for the next 14 days across all configured calendars. Look for recurring events with titles containing "lunch", "обед", "Mittagessen", "lunch break", "обеденный перерыв". Extract the most common start time. If found, pre-fill `lunch_home` / `lunch_work` based on whether the event is on a weekday and which calendar it's in. Skip the question if both values are confidently determined.
+
+If values not found via Calendar (or Google disabled) → ask:
+> «В какое время обычно обедаешь? Напиши: дома (выходные, удалёнка) и на работе. Например: "дома — 14:30, работа — 12:30". Или `пропустить`.»
 
 Parse and save to `config.user.lunch_home` (e.g. `"14:30"`) and `config.user.lunch_work` (e.g. `"12:30"`). If skipped, leave empty (skills will use a reasonable midday default).
 
-**7.4** «Хочешь задать ассистенту персонаж/характер для общения? Например: строгий помощник, дружелюбный, краткий и деловой — или придумай свой. Пришли описание или напиши `нет`.»
+**7.4 — AI persona (опционально)**
 
-If user says нет/no/skip → do nothing.  
-Otherwise → save verbatim into `/data/claude-home/projects/-app/memory/user_persona.md` with frontmatter (type: user). Append pointer to MEMORY.md.
+Send message:
+> Последний шаг — хочешь придумать мне характер? Могу быть кем угодно: деловой ассистент, дружелюбный напарник, саркастичный персонаж из фантастики — или любой твой вариант. Дай имя и описание, или напиши «нет».
+
+If user says нет/no/skip → set `config.user.persona_file = null`. Done, move to Section 8.
+
+Otherwise:
+1. From user's reply extract: **name** (for file slug, e.g. "jules"), **description** (tone, traits, voice, any references). If description is thin, ask one follow-up: «Что-то ещё — тон, стиль, что-то что нельзя нарушать?» — only one follow-up, don't over-interview.
+
+2. Slugify the name: lowercase, spaces → underscore, strip special chars (e.g. "Jules" → "jules", "Мой Ассистент" → "moy_assistent").
+
+3. Write `/data/claude-home/projects/-app/memory/user_persona_<slug>.md`:
+
+```markdown
+---
+name: user-persona-<slug>
+description: "User's requested assistant persona — <Name>"
+metadata:
+  type: user
+---
+
+<Verbatim or lightly structured description from user.>
+
+**Tone & character:** <key traits extracted from description>
+
+**How to apply:** Use this tone in all Telegram replies. Keep it consistent but don't let character get in the way of accuracy or clarity on important GTD tasks.
+```
+
+4. Append to `/data/claude-home/projects/-app/memory/MEMORY.md`:
+   ```
+   - [Persona: <Name>](user_persona_<slug>.md) — <one-line summary of character>
+   ```
+
+5. Set `config_draft.user.persona_file = "user_persona_<slug>.md"` (saved atomically in Section 9 config write).
+
+6. Update `/data/claude-home/CLAUDE.md` — find the line starting with `1. Read /data/config.json` and ensure it reads:
+   ```
+   1. Read `/data/config.json`. If `config.user.persona_file` is non-empty, also read `/root/.claude/projects/-app/memory/<config.user.persona_file>` and apply the described persona to all Telegram replies from this point on.
+   ```
+   If the line already contains `persona_file` → skip. If it's the old generic "Read config.json" line → replace it.
+
+Send confirmation:
+> Запомнила. Буду <Name> — <one-line summary>. Меняется с этого момента.
 
 ## Section 8 — jobs
 
@@ -251,7 +518,7 @@ Save into `config.jobs.<name>.{enabled,cron}`. For `proactive_inbox`: save `cron
 3. For each enabled job, call `CronCreate`. Save resulting IDs into `config.jobs.cron_ids`:
    - For all jobs except `proactive_inbox`: one `CronCreate` with `cron` = `config.jobs.<job>.cron`, `prompt` = `Invoke skill <skill-name>. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.` Save ID to `config.jobs.cron_ids.<job_name>`.
    - For `proactive_inbox`: two `CronCreate` calls — one with `cron_weekday` expression (ID → `config.jobs.cron_ids.proactive_inbox_weekday`) and one with `cron_weekend` expression (ID → `config.jobs.cron_ids.proactive_inbox_weekend`). Both use `prompt` = `Invoke skill proactive-inbox. install_dir=/data. Wrap with /app/bin/cron-log.sh start/lock/ok/fail.`
-   - Skill name mapping: `morning_ritual`→`morning-ritual`, `evening_review`→`evening-review`, `process_inbox`→`process-inbox`.
+   - Skill name mapping: `morning_ritual`→`morning-ritual`, `evening_review`→`evening-review`, `process_inbox`→`process-inbox`, `tasks_processing`→`tasks-processing`.
    - After all CronCreate calls, write the full `config.jobs.cron_ids` block to `/data/config.json`.
 4. Run a **dry-run** of each enabled skill (skill respects a `--dry-run` flag and prints what it would do). Report results.
 5. Send final Telegram message:
@@ -275,4 +542,14 @@ Save into `config.jobs.<name>.{enabled,cron}`. For `proactive_inbox`: save `cron
 - OAuth link unreachable (port-forward issue on VPS) → reply with the SSH local-forward command from `docs/deploy-digitalocean.md`.
 - Notion fetch returns 404 → tell user to share the page with the integration; pause until retry.
 - Schema probing finds no recognizable Status field → reply «не нашёл status — какое поле используешь?», fall back to user-provided answer.
-- User's existing setup is too divergent to map cleanly → save `config.gtd.unmappable_warning: true` and the verbatim user answer; skills run in degraded mode (skip Status filtering, surface everything) and the user is told.
+- User's existing setup is too divergent to map cleanly → save `config.gtd.unmappable_warning: true` and the verbatim user answer. Tell the user:
+
+  > Не смог полностью разобрать схему твоих баз. Запущу в адаптивном режиме: буду показывать все элементы без фильтрации по статусу, а ты подскажешь что нужно исправить. Настройку можно уточнить позже через `/gtd-config`.
+
+  **Degraded mode definition** (what each skill does when `unmappable_warning: true`):
+  - **process-inbox**: creates entries with Name + body only; skips Status/Date assignment; labels output ⚠️.
+  - **morning-ritual / evening-review**: fetches all NA items without Status filter; surfaces everything; labels section ⚠️.
+  - **proactive-inbox**: creates entries with Name + body only; skips Status/Date.
+  - **tasks-processing**: surfaces all Tasks DB items; skips Status routing; labels output ⚠️.
+
+  After a few days, propose to revisit: «Хочешь уточнить настройку баз данных? `/gtd-config` → "reconfigure Notion".»

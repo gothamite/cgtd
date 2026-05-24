@@ -17,13 +17,13 @@
 - [MCP disconnect after context overflow](feedback_mcp_after_context_overflow.md) — google-workspace MCP unavailable after session continuation; user must restart to reauth
 - [Google credentials in env](feedback_google_credentials_in_env.md) — GOOGLE_OAUTH_CLIENT_ID/SECRET always in env; try ToolSearch for gmail/calendar tools first
 - [Evening review order](feedback_evening_review_order.md) — process-inbox → tasks-processing must both finish before evening-review
-- [Tasks Inbox processing](feedback_tasks_inbox_processing.md) — Inbox-status tasks must be decomposed into NAs + moved to Approval required by tasks-processing (Part A)
+- [Tasks Inbox processing](feedback_tasks_inbox_processing.md) — status_open tasks decomposed into NAs; graduation → status_next_to_come (not In Progress); assistant proposes time slots
 - [Reminders as NA](feedback_reminders_as_na.md) — always create GCal popup event + Notion NA when user asks for a reminder
 - [Forwarded messages](feedback_forwarded_messages.md) — treat forwarded Telegram messages same as direct messages; process attachments too
 - [Task vs NA rule](feedback_task_vs_na.md) — single action → NA directly; Task requires minimum 2 NAs; decomposition patterns inside
 - [Slot only future times](feedback_morning_slots_time.md) — check user timezone first; never propose slots that have already passed
 - [Schedule conflict detection](feedback_schedule_conflicts.md) — detect and resolve overlapping NA time slots before presenting the plan; never show conflicts silently
-- [NA requires datetime](feedback_na_requires_datetime.md) — NA must have date+time (not Someday/Maybe); task only leaves Approval required when all NAs have datetimes
+- [NA requires datetime](feedback_na_requires_datetime.md) — NA must have date+time unless Someday/Maybe; Someday/Maybe NAs don't block task graduation; graduation target = status_next_to_come
 - [Human needs in planning](feedback_human_needs_planning.md) — always reserve lunch + rest breaks; flag overloaded days instead of silently accepting them
 - [Async task planning](feedback_async_tasks_planning.md) — split laundry/3D printing/cooking into launch+wait+finish; fill wait window with other NAs; track in background-tasks.json
 - [Implicit approval](feedback_implicit_approval.md) — "Отлично/Хорошо/Ок" after a plan = approval; always resolve pending actions, don't drop them
