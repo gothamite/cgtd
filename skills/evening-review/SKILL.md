@@ -9,7 +9,9 @@ Invoked by cron `cgtd-${install_id}-evening-review` (default `28 21 * * *`) or m
 
 ## Pre-flight
 
-Read `/data/config.json`. Required: `notion.next_actions_id`, `google.accounts[]`, `telegram.chat_id`.
+Read `/data/config.json`. Required: `notion.next_actions_id`, `telegram.chat_id`.
+
+**Google optional:** check `config.google.enabled`. If `false` or `config.google.accounts` is empty → skip Gmail and Calendar sections. Still run Notion sections.
 
 ## Logging wrapper
 
@@ -42,7 +44,7 @@ Before any API call, attempt `mcp__google-workspace__list_calendars user_google_
    - Q4 (low, no deadline) → Someday/Maybe
    Ask: «Одобряешь? [да / подправлю]». On approval → PATCH NAs with proposed Date. Remove from `tasks-pending.json`.
 3. **Flagged tasks.** Read `/data/tasks-flags.json`. If non-empty, surface grouped by reason. Ask user to confirm action or ignore.
-4. **Digest 24h.** Across all `config.google.accounts[]`: Gmail (actionable/decision, skip promo/social), Calendar events that passed today + tomorrow's schedule, Notion Inbox + NA changes.
+4. **[Google only] Digest 24h.** If `config.google.enabled`: Gmail (actionable/decision, skip promo/social) + Calendar events that passed today + tomorrow's schedule. Notion Inbox + NA changes regardless of Google status.
 5. **Control line.** Brief health: last-ok timestamps for the four crons via `cron-log.sh last-ok`.
 
 Silent if everything is empty.
@@ -64,5 +66,5 @@ TTL 12h. On SessionStart catch-up, items not acted on get the default action: **
 
 ## Failure modes
 
-- Notion MCP unauthenticated → skip TODAY REVIEW + Notion sections, still send Gmail/Calendar digest.
-- google-workspace `invalid_grant` → log fail, ping for /cgtd-reauth, exit.
+- Notion MCP unauthenticated → skip TODAY REVIEW + Notion sections; send Gmail/Calendar digest if Google enabled, otherwise log `ok` and exit.
+- **[Google only]** `invalid_grant` → log fail, ping for `/cgtd-reauth`, exit.

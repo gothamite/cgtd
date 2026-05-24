@@ -39,52 +39,53 @@ Four messages, one question each, wait for reply between:
 1. «Какой язык использовать для всех ответов и сводок? `en` / `ru` / `de`. По умолчанию `en`.» / «What language should I use? en / ru / de.» — save `config.user.locale`.
 2. «Как тебя называть? Имя — этого хватит.» / «What should I call you? First name is enough.» — save `config.user.name`.
 3. «Часовой пояс? Я предполагаю `<auto-detect from /etc/timezone or TZ>`. Подтверди или пришли свой (формат `Europe/Berlin`).» — save `config.user.timezone`.
-4. «Хочешь задать боту персонаж/характер для общения? Например: строгий помощник, дружелюбный ассистент, краткий и деловой, или придумай свой. Пришли описание в свободной форме — или напиши `нет`, чтобы оставить нейтральный тон.» / «Want to give the assistant a personality? Describe it freely (e.g. "friendly", "blunt and concise", "a sarcastic hacker") or say `no` for neutral.»
-
-   If user says «нет» / «no» / «skip» / equivalent → do nothing, no file created.
-   Otherwise → save the user's description verbatim into `/data/claude-home/projects/-app/memory/user_persona.md` with this structure:
-   ```markdown
-   ---
-   name: user-persona
-   description: "Custom assistant persona defined during setup"
-   metadata:
-     type: user
-   ---
-   <user's description verbatim>
-
-   **How to apply:** Use this tone and character in all Telegram replies. Don't let the persona override accuracy on important tasks — accuracy first, style second.
-   ```
-   Also append to `/data/claude-home/projects/-app/memory/MEMORY.md`:
-   `- [Assistant persona](user_persona.md) — <one-line summary of the persona>`
 
 From this point on, all assistant messages use `config.user.locale`.
 
-## Section 2 — Drive-account-purpose explanation
+## Section 2 — Google opt-in (optional)
 
-Before asking about Google accounts, send one message explaining **why** we need to know which Google account is primary:
+Ask one message:
 
-> Сейчас я попрошу авторизовать один или несколько Google-аккаунтов — я буду читать Gmail и Calendar из каждого. **Один из них** будет «основным»: на его Google Drive я создам папку, в которую буду складывать файлы, которые ты пересылаешь мне в Telegram (фото, PDF, голосовые). Каждая запись в Notion Inbox получит ссылку на сохранённый файл. Обычно основной = личный. Ок?
+> Хочешь подключить Google (Gmail + Calendar)?
+> Это позволит мне:
+> — читать входящие и добавлять важное в Notion автоматически
+> — видеть твои встречи при планировании дня
+> — сохранять файлы, которые ты пересылаешь мне, на Google Drive
+>
+> Всё это опционально — можно работать только с Notion. Подключить? `да / нет`
 
-(English/German equivalents.) Wait for "ok" / acknowledgement.
+(English/German equivalents.)
+
+**If "нет" / "no" / "skip":**
+- Set `config.google.enabled: false`, `config.google.drive_enabled: false`.
+- Advance to Section 4 (Notion API key). Skip Section 3 and Section 5.
+- Note in Telegram: «Ок. Gmail и Calendar подключить можно позже через `/gtd-config`.»
+
+**If "да" / "yes":** proceed to Section 3.
 
 ## Section 3 — Google OAuth (multi-account loop)
 
-Ask: «Перечисли все Gmail-адреса, которые надо опрашивать, через запятую. Первый станет основным (туда складываем вложения).»
+Ask: «Перечисли все Gmail-адреса, которые надо опрашивать, через запятую. Первый станет основным — на него буду сохранять вложения из Telegram (если захочешь Drive).»
 
 For each `email` in the user's list:
 
-1. Reply with «Сейчас открою для тебя ссылку авторизации `<email>`. **Открой её на компьютере, где запущен Docker** (на телефоне не сработает — редирект уходит на `localhost:8000`).»
+1. Reply: «Сейчас открою ссылку авторизации для `<email>`. **Открой на компьютере, где запущен Docker** (на телефоне не сработает — редирект уходит на `localhost:8000`).»
 2. Call `mcp__google-workspace__list_calendars user_google_email=<email>` — server returns an OAuth URL on first call.
 3. Send the URL as a Telegram message.
 4. Wait for the user to reply «готово» / «done» / equivalent.
-5. Retry `list_calendars`. If success → save `<email>` into `config.google.accounts[]`, advance. If still failing → reply «не получилось — давай попробуем ещё раз» with the URL again.
+5. Retry `list_calendars`. If success → save `<email>` into `config.google.accounts[]`, advance. If still failing → retry with the URL again.
 
-After the loop: confirm the primary («Основной = `<first email>`. Менять?»). Save `config.google.primary`.
+After the loop:
+- Confirm the primary («Основной = `<first email>`. Менять?»). Save `config.google.primary`.
+- Set `config.google.enabled: true`.
+- Ask: «Хочешь чтобы я сохранял вложения из Telegram на Google Drive? Тогда в каждой записи Inbox будет ссылка на файл. `да / нет`»
+  - If yes → set `config.google.drive_enabled: true`. Drive folder will be created in Section 5.
+  - If no → set `config.google.drive_enabled: false`. Skip Section 5.
 
 ## Section 4 — Notion API key
 
 1. Call `mcp__notion__notion-search` with `query=""`.
-   - If it returns valid results or an empty list → key already configured (came from `.env`). Advance `init-progress.json` `section` to `"drive_folder"` and continue to Section 5 (Drive folder).
+   - If it returns valid results or an empty list → key already configured (came from `.env`). Advance `init-progress.json` `section` to `"drive_folder"` if `config.google.drive_enabled` is true, else to `"gtd_interview"`. Continue to the appropriate section.
    - If it returns an error (MCP not connected / key missing) → proceed to step 2.
 
 2. Send Telegram message:
@@ -110,17 +111,19 @@ After the loop: confirm the primary («Основной = `<first email>`. Ме�
 
 5. On next `/gtd-config` invocation: state machine loads `section = "drive_folder"` and resumes there. At the top of the `drive_folder` handler, call `mcp__notion__notion-search` with `query=""` to verify connectivity. If it fails, tell the user the key isn't working and prompt them to check `.env` / restart again. If it succeeds, proceed normally.
 
-## Section 5 — Drive folder
+## Section 5 — Drive folder (only if `config.google.drive_enabled: true`)
+
+Skip this section entirely if `config.google.drive_enabled` is false.
 
 Auto-create the inbox-attachments folder on the primary account's Drive:
 
 ```
 mcp__google-workspace__create_drive_folder
   user_google_email = <config.google.primary>
-  folder_name = "Notion Inbox Attachments"
+  folder_name = <config.google.drive_inbox_folder_name or "Notion Inbox Attachments">
 ```
 
-Save `folder_id` into `config.google.drive_inbox_folder_id`. Reply «✓ создал папку `Notion Inbox Attachments` на Drive `<primary>` — туда будут попадать пересланные тобой файлы».
+Save `folder_id` into `config.google.drive_inbox_folder_id`. Reply «✓ создал папку на Drive `<primary>` — туда будут попадать вложения из Telegram».
 
 ## Section 6 — GTD interview (the customization core)
 
@@ -132,15 +135,19 @@ Ask: «У тебя уже настроена GTD-система в Notion (Inbox
 
 **If "нет":** offer to create the default layout.
 
-> Я могу создать тебе четыре базы (Inbox, Next Actions, Tasks, Notes) и страницу-архив под одной родительской страницей. Это «дефолтная» схема репозитория — все скиллы из коробки работают с ней. Создать?
+> Я могу создать тебе структуру в Notion — Inbox, Next Actions, Tasks и Notes — под одной родительской страницей. Это стандартная GTD-схема, с которой все функции работают из коробки. Создать?
 
 If yes:
-- Ask the user for the URL of any Notion page where the GTD parent should live (or just «создать на верхнем уровне workspace»).
+- Ask the user for the URL of any Notion page where the GTD parent should live (or «создать на верхнем уровне workspace»).
 - Call `mcp__notion__notion-create-pages` to create:
   - Parent page «🗂 GTD»
-  - Inside it: 4 databases (Inbox, Next Actions, Tasks, Notes) with the schemas from the OLD `notion-setup.md` (Inbox: Name/Source/Created/URL; Next Actions: Name/Status/Date/Project/Eisenhower; Tasks: Name/Status/Deadline; Notes: Name/Category/Tags/Source/URL)
-  - One page «📦 Inbox Archive»
-- Save the data_source IDs into `config.notion.{inbox,next_actions,tasks,notes,inbox_archive_page}_id`.
+  - Inside it: 4 databases:
+    - **Inbox**: Name, Source (text), Created (date), URL (url)
+    - **Next Actions**: Name, Status (status: Not started/Done/Cancelled/Someday\nMaybe), Date (date), Priority (select: high/normal/low), Task (relation→Tasks)
+    - **Tasks**: Name, Status (status groups: todo=Inbox/Not Started/Next to Come/Maybe, in\_progress=In Progress/Waiting, complete=Done/Canceled/Archive/Approval required), Priority (select: high/normal/low), Due (date), Next Actions (relation→Next Actions)
+    - **Notes**: Name, Category (select), Tags (multi-select), Source (text), URL (url)
+- Save the page/database IDs into `config.notion.{inbox,next_actions,tasks,notes}_id`.
+- Set `config.gtd.has_tasks_db: true`, `config.gtd.has_projects_db: false`.
 - Skip 6.2 — user gets the default skill behavior with no overlays needed.
 
 **If "да":** run the interview below.
@@ -155,10 +162,9 @@ Ask, one question per Telegram message, waiting for reply:
 
 4. «У тебя есть отдельная база для **Задач** — конкретных шагов внутри проектов (например "Залить фундамент", "Подключить отопление")? Если да — URL; если нет — `нет`.» Save DB ID into `config.notion.tasks_id`. Set `config.gtd.has_tasks_db: true` if URL provided, `false` if "нет". *(Все четыре комбинации валидны: оба / только Projects / только Tasks / ни того ни другого.)*
 
-5. «Как ты ведёшь расписание рядом с Next Actions? `1)` Calendar и NA — одна база (NA сразу попадают в Календарь) `2)` раздельно — NA в Notion, встречи в Google Calendar `3)` не использую Календарь для планирования.» Save `config.gtd.calendar_integration: "unified" | "separate" | "none"`.
+5. «Как ты ведёшь расписание рядом с Next Actions? `1)` Calendar и NA — одна база (NA сразу попадают в Календарь) `2)` раздельно — NA в Notion, встречи в Google Calendar `3)` не использую Календарь для планирования.» Save `config.gtd.calendar_integration: "unified" | "separate" | "none"`. If Google is not enabled (`config.google.enabled: false`) → auto-select `"none"`, skip this question.
 
 6. «База для **заметок / референсов** (статьи, контакты, идеи)? URL или `нет`.»
-7. «Куда ты архивируешь обработанные Inbox-записи? URL страницы-архива, или `удаляю` / `меняю статус` / `нет`.»
 
 For each provided URL: call `mcp__notion__retrieve-a-page` to validate access. If 403/404, reply «не вижу — поделись страницей с интеграцией (Share → Connections → выбери твою интеграцию `<config.notion.integration_name>`) и пришли URL ещё раз». Save IDs into `config.notion.*_id`.
 
@@ -194,7 +200,8 @@ Based on `config.gtd.*`, write customized SKILL.md files into `/data/skills-over
   If user has no Notes DB, drop the Notes branch and inline references into Inbox body.
 - **morning-ritual** — replace status filter («Status ∉ {Done, Cancelled}») with the user's terms. Replace Eisenhower references with `config.gtd.priority_scheme` (drop entirely if `none`). For `calendar_integration: "unified"`: present Calendar and NA as one merged schedule, deduplicate by event_id. For `"separate"`: two parallel sections (Calendar, then NA). For `"none"`: omit Calendar section.
 - **evening-review** — same status replacements. Same `calendar_integration` rendering as morning-ritual: for `"unified"` → merged schedule with dedup by event_id; for `"separate"` → two parallel sections; for `"none"` → omit Calendar section.
-- **proactive-inbox** — replace status terms; if user has no Notes DB, route newsletters/references to Inbox body instead.
+- **proactive-inbox** — replace status terms; if user has no Notes DB, route newsletters/references to Inbox body instead. If `config.google.enabled: false`, this skill is a no-op — note that in the overlay header.
+- **tasks-processing** — if `config.gtd.has_tasks_db` is false, overlay replaces entire skill body with "exit silently — no tasks DB". Otherwise: replace all hardcoded status values (Inbox, Approval required, Not Started, Next to Come, Maybe, In Progress, Waiting, Done, Canceled, Archive) with `config.gtd.tasks.status_values.*`. Save the mapping into `config.gtd.tasks.status_values` during the probing step (Section 6.2 question 4).
 - **inbox-router** — replace `notion.inbox_id` reference (already config-driven, so usually no overlay needed unless user opted out of Inbox-everything).
 
 Method: read each shipped `/app/skills/<name>/SKILL.md`, run substitution on the named hardcoded strings, write the result to `/data/skills-overlay/<name>/SKILL.md`. Substitutions are recorded in `config.gtd.overlay_substitutions[]` so a future `/cgtd-reset-skills` knows what was changed.
@@ -205,9 +212,27 @@ After writing overlays, the entrypoint's per-skill symlinking (already in `entry
 
 ## Section 7 — schedule
 
-Ask: «Расписание — когда я тебе пингую? Выбери пресет: `1)` flex (только утренний и вечерний пинг, без жёстких часов) `2)` 9-to-5 офис `3)` сменный график `4)` свой».
+Ask four questions, one per message:
 
-For each preset, fill `config.schedule.weekday_blocks` and `config.schedule.weekend_rule`. Custom = ask block by block.
+**7.1** «Расписание — когда я тебе пингую? Выбери пресет: `1)` flex (только утренний и вечерний пинг, без жёстких часов) `2)` 9-to-5 офис `3)` сменный график `4)` свой».
+
+For each preset, fill `config.schedule.weekday_blocks` and `config.schedule.weekend_rule` (`flex` default). Custom = ask block by block.
+
+**7.2** «Как предпочитаешь выходные? Например: "суббота — отдых, воскресенье — дела", "гибко, без разницы", "оба дня рабочие" — напиши своими словами. Или `пропустить`.»
+
+Save verbatim to `config.user.weekend_preference`. Also extract a machine-readable value for `config.schedule.weekend_rule`:
+- Mentions rest/leisure/chill on both days → `"rest"`
+- Explicit "subbota=otdykh, voskresenye=dela" or similar asymmetric split → `"custom"` (save the split in `config.user.weekend_preference`)
+- No preference / flexible / both same → `"flex"`
+
+**7.3** «В какое время обычно обедаешь? Напиши: дома (выходные, удалёнка) и на работе. Например: "дома — 14:30, работа — 12:30". Или `пропустить`.»
+
+Parse and save to `config.user.lunch_home` (e.g. `"14:30"`) and `config.user.lunch_work` (e.g. `"12:30"`). If skipped, leave empty (skills will use a reasonable midday default).
+
+**7.4** «Хочешь задать ассистенту персонаж/характер для общения? Например: строгий помощник, дружелюбный, краткий и деловой — или придумай свой. Пришли описание или напиши `нет`.»
+
+If user says нет/no/skip → do nothing.  
+Otherwise → save verbatim into `/data/claude-home/projects/-app/memory/user_persona.md` with frontmatter (type: user). Append pointer to MEMORY.md.
 
 ## Section 8 — jobs
 

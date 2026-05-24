@@ -36,8 +36,8 @@ If the message doesn't start with `/`, route to Inbox per the logic below.
 2. Verify the message came from `config.telegram.chat_id` (channel plugin's allowlist already filters; this is belt-and-suspenders).
 3. **Attachments**: if the message has an `image_path` or `attachment_file_id`:
    - Download via `mcp__plugin_telegram_telegram__download_attachment`.
-   - Upload to the primary Drive folder via `mcp__google-workspace__create_drive_file user_google_email=<config.google.primary> folder_id=<config.google.drive_inbox_folder_id>`.
-   - Get the shareable link.
+   - **[Drive only]** If `config.google.drive_enabled` is true AND `config.google.drive_inbox_folder_id` is set: upload to Drive via `mcp__google-workspace__create_drive_file user_google_email=<config.google.primary> folder_id=<config.google.drive_inbox_folder_id>`. Get the shareable link and include it in the Inbox entry.
+   - If Drive is not enabled: save the local file path in the Inbox entry body as context (path may be temporary — note this to the user).
 4. **Apply rule files** from `/data/memory/`:
    - `feedback_implicit_dates.md` — parse «до конца зимы», "by next Friday", etc.
    - `feedback_contextual_deadlines.md` — infer deadlines from context.
@@ -51,6 +51,7 @@ If the message looks like a reply to an entry in `/data/pending-reviews.jsonl` (
 
 ## Failure modes
 
-- Notion auth expired → react with `⚠️`, reply «Notion auth истёк. Запусти `/cgtd-reauth notion`». Do NOT silently drop.
-- Drive upload failed → still create Inbox entry without attachment link, mention in body «(вложение не удалось загрузить)».
+- Notion auth expired → react with `⚠️`, reply «Notion auth expired. Run `/cgtd-reauth notion`». Do NOT silently drop.
+- Drive upload failed → still create Inbox entry without attachment link, mention in body «(attachment upload failed)».
+- Drive not configured → create Inbox entry without Drive link; body notes the attachment was received.
 - Config exists but `notion.inbox_id` empty (incomplete init) → fall back to pre-init guard behavior.

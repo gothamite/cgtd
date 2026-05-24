@@ -6,7 +6,6 @@
 - [Inbox capture behavior](feedback_inbox_capture.md) — capture bucket: save verbatim, no questions, handle attachments by size/MIME (lh3 CDN for images)
 - [Check before asking](feedback_check_before_asking.md) — always look up Notion/Gmail/Calendar before asking the user a question
 - [Telegram reply format](feedback_telegram_reply.md) — all responses via reply tool, format="markdownv2", escape special chars
-- [Weekend schedule preference](user_weekend_schedule.md) — Saturday = leisure only; Sunday = household/admin
 - [Notion reauth procedure](feedback_notion_reauth.md) — how to fix Notion MCP 401 errors; what works and what doesn't
 - [Cron sessions have no MCP tools](feedback_cron_no_mcp.md) — use Google API + Notion REST directly in cron context; fallback immediately if ToolSearch shows no google-workspace tools
 - [Startup cron check first](feedback_startup_crons.md) — CronList + recreate missing crons BEFORE handling any first message
@@ -26,7 +25,6 @@
 - [Schedule conflict detection](feedback_schedule_conflicts.md) — detect and resolve overlapping NA time slots before presenting the plan; never show conflicts silently
 - [NA requires datetime](feedback_na_requires_datetime.md) — NA must have date+time (not Someday/Maybe); task only leaves Approval required when all NAs have datetimes
 - [Human needs in planning](feedback_human_needs_planning.md) — always reserve lunch + rest breaks; flag overloaded days instead of silently accepting them
-- [User: Lunch schedule](user_lunch_schedule.md) — home ~14:30–15:00; work ~12:20–13:00
 - [Async task planning](feedback_async_tasks_planning.md) — split laundry/3D printing/cooking into launch+wait+finish; fill wait window with other NAs; track in background-tasks.json
 - [Implicit approval](feedback_implicit_approval.md) — "Отлично/Хорошо/Ок" after a plan = approval; always resolve pending actions, don't drop them
 - [Calendar↔NA sync](feedback_calendar_na_sync.md) — Google Calendar events and Notion NAs for the same event must always be in sync; update both on any reschedule

@@ -9,7 +9,11 @@ Invoked by cron `cgtd-${install_id}-proactive-inbox` (default `13 8-20/2 * * *`)
 
 ## Pre-flight
 
-Read `/data/config.json`. Required: `notion.{inbox,next_actions}_id`, `google.accounts[]`, `telegram.chat_id` (if Telegram enabled). If missing → log `fail` with `config_incomplete`, exit.
+Read `/data/config.json`.
+
+**Google required for this skill.** Check `config.google.enabled` and `config.google.accounts`. If Google is disabled or accounts list is empty → log `ok` with `google_not_configured`, exit silently. This skill is a no-op without Google.
+
+Also required: `notion.inbox_id` or `notion.next_actions_id` (at least one). `telegram.chat_id` for output. If Notion not configured → log `fail` with `config_incomplete`, exit.
 
 ## Logging wrapper
 

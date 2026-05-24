@@ -9,7 +9,11 @@ Invoked by cron (default `45 21 * * *`) or manually via `/tasks-processing`.
 
 ## Pre-flight
 
-Read `/data/config.json`. Required: `notion.{tasks_id,next_actions_id}`, `telegram.chat_id`.
+Read `/data/config.json`.
+
+**Tasks DB required.** Check `config.gtd.has_tasks_db` and `config.notion.tasks_id`. If either is `false` / empty → log `ok "$RID"` with `tasks_not_configured`, exit silently. This skill is a no-op for users without a Tasks layer in their GTD setup.
+
+**Status values.** This skill uses status names from `config.gtd.tasks.status_values` if set (written by gtd-interview overlay generation). Default fallback values (used if config is absent — e.g. the default Notion DB created during setup) are: inbox=`"Inbox"`, pending=`"Approval required"`, not_started=`"Not Started"`, next=`"Next to Come"`, maybe=`"Maybe"`, in_progress=`"In Progress"`, waiting=`"Waiting"`, done=`"Done"`, cancelled=`"Canceled"`, archive=`"Archive"`. Throughout this skill, wherever status values appear, read from config first, fall back to defaults.
 
 ## Logging wrapper
 
